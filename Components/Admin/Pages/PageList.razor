@@ -1,0 +1,106 @@
+@page "/admin/pages"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin")]
+@rendermode InteractiveServer
+@inject BlogService Blog
+@inject IJSRuntime JS
+
+<PageTitle>独立页面 · 墨屿写作后台</PageTitle>
+
+<div class="admin-page-head">
+    <div>
+        <span class="admin-eyebrow">CONTENT / PAGES</span>
+        <h1>独立页面</h1>
+        <p>关于、友链，或者任何不属于时间线的页面。</p>
+    </div>
+    <a class="btn btn-primary" href="/admin/pages/new">
+        <Icon Name="plus" Size="17" />
+        新建页面
+    </a>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="form-alert form-alert-success">@message</div>
+}
+
+<section class="admin-panel">
+    @if (pages.Count == 0)
+    {
+        <EmptyState Title="还没有独立页面" Description="「关于」是一个不错的起点。"
+                    ActionText="新建页面" ActionHref="/admin/pages/new" />
+    }
+    else
+    {
+        <div class="admin-table-wrap">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>页面</th>
+                        <th>状态</th>
+                        <th>导航</th>
+                        <th>排序</th>
+                        <th>更新</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var sitePage in pages)
+                    {
+                        <tr>
+                            <td>
+                                <a class="table-title" href="@($"/admin/pages/{sitePage.Id}/edit")">@sitePage.Title</a>
+                                <span class="table-slug">/@sitePage.Slug</span>
+                            </td>
+                            <td>
+                                <span class="status-badge @(sitePage.IsPublished ? "is-published" : "is-draft")">
+                                    @(sitePage.IsPublished ? "公开" : "隐藏")
+                                </span>
+                            </td>
+                            <td class="table-muted">@(sitePage.ShowInNavigation ? "显示" : "—")</td>
+                            <td class="table-muted">@sitePage.SortOrder</td>
+                            <td class="table-muted">@ChinaTime.FormatDate(sitePage.UpdatedAtUtc)</td>
+                            <td class="table-actions">
+                                @if (sitePage.IsPublished)
+                                {
+                                    <a href="@($"/{sitePage.Slug}")" target="_blank" rel="noopener" title="查看" aria-label="查看页面">
+                                        <Icon Name="external" Size="16" />
+                                    </a>
+                                }
+                                <a href="@($"/admin/pages/{sitePage.Id}/edit")" title="编辑" aria-label="编辑页面">
+                                    <Icon Name="edit" Size="16" />
+                                </a>
+                                <button type="button" class="danger-link" title="删除" aria-label="删除页面" @onclick="() => DeleteAsync(sitePage)">
+                                    <Icon Name="trash" Size="16" />
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@code {
+    private List<BlogPage> pages = [];
+    private string? message;
+
+    protected override async Task OnInitializedAsync()
+    {
+        pages = await Blog.GetAllPagesAsync();
+    }
+
+    private async Task DeleteAsync(BlogPage sitePage)
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"确定删除页面「{sitePage.Title}」吗？此操作不可恢复。");
+        if (!confirmed)
+        {
+            return;
+        }
+
+        await Blog.DeletePageAsync(sitePage.Id);
+        pages.RemoveAll(p => p.Id == sitePage.Id);
+        message = $"已删除页面「{sitePage.Title}」。";
+    }
+}

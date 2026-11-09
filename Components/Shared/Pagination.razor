@@ -1,0 +1,62 @@
+@inject NavigationManager Navigation
+
+@if (TotalPages > 1)
+{
+    <nav class="pagination" aria-label="分页">
+        @if (Page > 1)
+        {
+            <a class="page-arrow" href="@UrlFor(Page - 1)" aria-label="上一页"><Icon Name="chevron-left" Size="18" /></a>
+        }
+        else
+        {
+            <span class="page-arrow is-disabled"><Icon Name="chevron-left" Size="18" /></span>
+        }
+
+        @foreach (var number in PageNumbers())
+        {
+            if (number == Page)
+            {
+                <span class="page-number is-current" aria-current="page">@number</span>
+            }
+            else
+            {
+                <a class="page-number" href="@UrlFor(number)">@number</a>
+            }
+        }
+
+        @if (Page < TotalPages)
+        {
+            <a class="page-arrow" href="@UrlFor(Page + 1)" aria-label="下一页"><Icon Name="chevron-right" Size="18" /></a>
+        }
+        else
+        {
+            <span class="page-arrow is-disabled"><Icon Name="chevron-right" Size="18" /></span>
+        }
+    </nav>
+}
+
+@code {
+    [Parameter] public int Page { get; set; } = 1;
+    [Parameter] public int TotalPages { get; set; } = 1;
+    [Parameter] public string BasePath { get; set; } = "/blog";
+    [Parameter] public Dictionary<string, string?> Query { get; set; } = new();
+
+    private IEnumerable<int> PageNumbers()
+    {
+        var start = Math.Max(1, Page - 2);
+        var end = Math.Min(TotalPages, start + 4);
+        start = Math.Max(1, end - 4);
+        return Enumerable.Range(start, end - start + 1);
+    }
+
+    private string UrlFor(int page)
+    {
+        var parameters = new Dictionary<string, string?>(Query)
+        {
+            ["page"] = page.ToString()
+        };
+
+        var objectParameters = parameters.ToDictionary(pair => pair.Key, pair => (object?)pair.Value);
+        return Navigation.GetUriWithQueryParameters(BasePath, objectParameters);
+    }
+}

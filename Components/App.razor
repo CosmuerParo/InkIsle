@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <meta name="theme-color" content="#f5f1e8" />
+    <meta name="generator" content=".NET 8 Blazor Web App" />
+    <link rel="icon" type="image/svg+xml" href="images/favicon.svg" />
+    <link rel="stylesheet" href="css/site.css" />
+    <link rel="alternate" type="application/rss+xml" title="墨屿 RSS" href="/feed.xml" />
+    <script>
+        (() => {
+            try {
+                const saved = localStorage.getItem('inkisle-theme');
+                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                document.documentElement.dataset.theme = saved || (prefersDark ? 'dark' : 'light');
+            } catch { }
+        })();
+    </script>
+    <HeadOutlet />
+</head>
+<body>
+    <Routes />
+    <script src="js/editor.js"></script>
+    <script src="js/site.js"></script>
+    <script src="_framework/blazor.web.js"></script>
+</body>
+</html>

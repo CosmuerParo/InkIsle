@@ -1,0 +1,528 @@
+@page "/admin/posts/new"
+@page "/admin/posts/{Id:int}/edit"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin")]
+@rendermode InteractiveServer
+@inject BlogService Blog
+@inject MarkdownService Markdown
+@inject SiteSettingsService SettingsService
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<PageTitle>@(IsNew ? "写新文章" : "编辑文章") · 墨屿写作后台</PageTitle>
+
+<div class="editor-head">
+    <div>
+        <nav class="admin-breadcrumb">
+            <a href="/admin/posts">文章</a>
+            <span>/</span>
+            <span>@(IsNew ? "新文章" : "编辑")</span>
+        </nav>
+        <h1>@(IsNew ? "写一篇新文章" : "继续编辑")</h1>
+    </div>
+    <div class="editor-head-actions">
+        <span class="editor-dirty @(_dirty ? "is-visible" : "")" data-dirty-indicator>有未保存的修改</span>
+        @if (!IsNew && existing?.Status == PostStatus.Published)
+        {
+            <a class="btn btn-ghost" href="@($"/blog/{existing.Slug}")" target="_blank">
+                <Icon Name="external" Size="16" />
+                查看
+            </a>
+        }
+        <button class="btn btn-primary" type="button" @onclick="SaveAsync" disabled="@_busy">
+            @if (_busy)
+            {
+                <span class="spinner"></span>
+            }
+            else
+            {
+                <Icon Name="check" Size="17" />
+            }
+            保存
+        </button>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="form-alert form-alert-error">@errorMessage</div>
+}
+@if (!string.IsNullOrWhiteSpace(savedMessage))
+{
+    <div class="form-alert form-alert-success">@savedMessage</div>
+}
+
+<EditForm EditContext="_editContext" class="editor-form">
+    <DataAnnotationsValidator />
+
+    <div class="editor-layout">
+        <div class="editor-primary">
+            <section class="editor-title-card">
+                <label class="sr-only" for="post-title">文章标题</label>
+                <InputText id="post-title" class="editor-title-input" @bind-Value="Model.Title" placeholder="给这篇文章一个标题…" />
+                <ValidationMessage For="() => Model.Title" class="field-error" />
+
+                <div class="slug-editor">
+                    <span class="slug-prefix">/blog/</span>
+                    <InputText class="slug-input" @bind-Value="Model.Slug" placeholder="url-slug" />
+                    <button class="slug-generate" type="button" @onclick="GenerateSlug">从标题生成</button>
+                </div>
+                <p class="field-help">Slug 只支持小写字母、数字与连字符。留空时保存会自动生成。</p>
+                <ValidationMessage For="() => Model.Slug" class="field-error" />
+            </section>
+
+            <section class="editor-workspace">
+                <div class="editor-toolbar">
+                    <div class="toolbar-group">
+                        <button type="button" title="加粗" @onclick="Bold"><Icon Name="bold" Size="16" /></button>
+                        <button type="button" title="斜体" @onclick="Italic" class="toolbar-italic">I</button>
+                        <button type="button" title="二级标题" @onclick="Heading"><Icon Name="heading" Size="16" /></button>
+                        <button type="button" title="引用" @onclick="Quote"><Icon Name="quote" Size="16" /></button>
+                        <button type="button" title="列表" @onclick="List"><Icon Name="list" Size="16" /></button>
+                    </div>
+                    <div class="toolbar-group">
+                        <button type="button" title="链接" @onclick="Link"><Icon Name="link" Size="16" /></button>
+                        <button type="button" title="图片" @onclick="Image"><Icon Name="image" Size="16" /></button>
+                        <button type="button" title="代码块" @onclick="CodeBlock"><Icon Name="code" Size="16" /></button>
+                        <button type="button" title="JS 代码块" @onclick="JsBlock" class="toolbar-text">JS</button>
+                    </div>
+                    <div class="toolbar-spacer"></div>
+                    <button class="toolbar-refresh" type="button" @onclick="RefreshPreview">
+                        <Icon Name="spark" Size="15" />
+                        刷新预览
+                    </button>
+                </div>
+
+                <div class="editor-panes">
+                    <div class="editor-pane">
+                        <div class="pane-label">MARKDOWN</div>
+                        <InputTextArea id="post-content" class="markdown-textarea" @bind-Value="Model.ContentMarkdown"
+                                       @bind-Value:after="RefreshPreview" placeholder="从这里开始写… 支持 Markdown 与内嵌 HTML。" spellcheck="false" />
+                        <ValidationMessage For="() => Model.ContentMarkdown" class="field-error" />
+                    </div>
+                    <div class="editor-pane preview-pane">
+                        <div class="pane-label">PREVIEW</div>
+                        @if (string.IsNullOrWhiteSpace(previewHtml))
+                        {
+                            <div class="preview-empty">
+                                <span>预览会出现在这里</span>
+                                <small>左侧输入内容，或者点击「刷新预览」。</small>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="prose preview-prose">
+                                @((MarkupString)previewHtml)
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="editor-statusbar">
+                    <span>@WordCount 字</span>
+                    <span>·</span>
+                    <span>约 @ReadingTime.EstimateMinutes(Model.ContentMarkdown) 分钟阅读</span>
+                    <span class="statusbar-spacer"></span>
+                    <span>支持 Markdown / HTML / 内嵌 JS</span>
+                </div>
+            </section>
+
+            <section class="editor-card">
+                <div class="editor-card-head">
+                    <div>
+                        <h2>摘要</h2>
+                        <p>显示在文章列表与搜索描述中。留空会自动从正文截取。</p>
+                    </div>
+                </div>
+                <InputTextArea class="input editor-summary-input" @bind-Value="Model.Summary" rows="3"
+                               placeholder="用一两句话介绍这篇文章…" />
+                <ValidationMessage For="() => Model.Summary" class="field-error" />
+            </section>
+
+            <section class="editor-card">
+                <details class="advanced-section" open="@(!string.IsNullOrWhiteSpace(Model.CustomJs) || !string.IsNullOrWhiteSpace(Model.CustomCss))">
+                    <summary>
+                        <span><Icon Name="code" Size="17" /> 自定义 CSS 与 JavaScript</span>
+                        <span class="advanced-badge">仅本文生效</span>
+                    </summary>
+                    <div class="advanced-body">
+                        <div class="form-note form-note-warning">
+                            <strong>关于内嵌 JS</strong>
+                            <p>这里的脚本会和文章一起保存，并在文章页面加载后执行。它拥有页面权限，请只添加你信任的代码。可以使用 <code>document.getElementById</code> 操作文章内的元素。</p>
+                        </div>
+
+                        <div class="field">
+                            <div class="field-label-row">
+                                <label for="custom-css">自定义 CSS</label>
+                                <span class="field-hint">作用于本篇文章页面</span>
+                            </div>
+                            <InputTextArea id="custom-css" class="input code-textarea" @bind-Value="Model.CustomCss" rows="6"
+                                           placeholder=".js-demo { border-color: var(--accent); }" spellcheck="false" />
+                        </div>
+
+                        <div class="field">
+                            <div class="field-label-row">
+                                <label for="custom-js">自定义 JavaScript</label>
+                                <button class="mini-link" type="button" @onclick="InsertJsSample">插入示例</button>
+                            </div>
+                            <InputTextArea id="custom-js" class="input code-textarea" @bind-Value="Model.CustomJs" rows="10"
+                                           placeholder="(() => { const el = document.getElementById('demo'); if (!el) return; /* ... */ })();"
+                                           spellcheck="false" />
+                            <p class="field-help">脚本在页面加载后执行，兼容 Blazor 的增强导航。不要在这里放置构建步骤或外部依赖。</p>
+                        </div>
+                    </div>
+                </details>
+            </section>
+        </div>
+
+        <aside class="editor-sidebar">
+            <section class="editor-side-card">
+                <h2>发布</h2>
+                <div class="field">
+                    <label for="post-status">状态</label>
+                    <InputSelect id="post-status" class="input" @bind-Value="Model.Status">
+                        <option value="@PostStatus.Draft">草稿 · 仅后台可见</option>
+                        <option value="@PostStatus.Published">已发布 · 公开可见</option>
+                    </InputSelect>
+                </div>
+                <label class="switch-row">
+                    <span><strong>首页推荐</strong><small>优先展示在首页推荐位</small></span>
+                    <InputCheckbox @bind-Value="Model.IsFeatured" />
+                </label>
+                @if (existing?.PublishedAtUtc is not null)
+                {
+                    <p class="side-meta">首次发布于 @ChinaTime.FormatDate(existing.PublishedAtUtc.Value)</p>
+                }
+                <button class="btn btn-primary btn-block" type="button" @onclick="SaveAsync" disabled="@_busy">
+                    <Icon Name="check" Size="17" />
+                    @(Model.Status == PostStatus.Published ? "保存并发布" : "保存草稿")
+                </button>
+                @if (!IsNew)
+                {
+                    <button class="btn btn-danger-ghost btn-block" type="button" @onclick="DeleteAsync" disabled="@_busy">
+                        <Icon Name="trash" Size="16" />
+                        删除这篇文章
+                    </button>
+                }
+            </section>
+
+            <section class="editor-side-card">
+                <h2>封面与标签</h2>
+                <div class="field">
+                    <label for="cover-url">封面图片地址</label>
+                    <InputText id="cover-url" class="input" @bind-Value="Model.CoverImageUrl" placeholder="/images/cover.svg 或 https://…" />
+                    <p class="field-help">留空时使用自动生成的抽象封面。</p>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(Model.CoverImageUrl))
+                {
+                    <div class="cover-preview">
+                        <img src="@Model.CoverImageUrl" alt="封面预览" />
+                    </div>
+                }
+                <div class="field">
+                    <label for="post-tags">标签</label>
+                    <InputText id="post-tags" class="input" @bind-Value="Model.Tags" placeholder="写作, 生活, JavaScript" />
+                    <p class="field-help">使用逗号分隔，最多 12 个。</p>
+                </div>
+            </section>
+
+            <section class="editor-side-card">
+                <details class="advanced-section advanced-section-compact">
+                    <summary><span><Icon Name="search" Size="16" /> SEO 设置</span></summary>
+                    <div class="advanced-body">
+                        <div class="field">
+                            <label for="seo-title">SEO 标题</label>
+                            <InputText id="seo-title" class="input" @bind-Value="Model.SeoTitle" placeholder="留空使用文章标题" />
+                        </div>
+                        <div class="field">
+                            <label for="seo-description">SEO 描述</label>
+                            <InputTextArea id="seo-description" class="input" @bind-Value="Model.SeoDescription" rows="3" placeholder="留空使用摘要" />
+                        </div>
+                    </div>
+                </details>
+            </section>
+
+            <div class="editor-side-note">
+                <Icon Name="spark" Size="17" />
+                <p>写作提示：不必一次写完。先保存草稿，等想清楚了再发布。</p>
+            </div>
+        </aside>
+    </div>
+</EditForm>
+
+<NavigationLock ConfirmExternalNavigation="_dirty" />
+
+@code {
+    [Parameter] public int? Id { get; set; }
+
+    [SupplyParameterFromQuery(Name = "saved")]
+    public bool Saved { get; set; }
+
+    private PostEditModel Model { get; set; } = new();
+    private EditContext _editContext = default!;
+    private BlogPost? existing;
+    private SiteSettings? settings;
+    private string previewHtml = "";
+    private string? errorMessage;
+    private string? savedMessage;
+    private bool _busy;
+    private bool _dirty;
+    private int? loadedId;
+    private bool newInitialized;
+
+    private bool IsNew => Id is null;
+    private int WordCount => Model.ContentMarkdown.Count(c => !char.IsWhiteSpace(c));
+
+    protected override async Task OnParametersSetAsync()
+    {
+        settings = await SettingsService.GetAsync();
+
+        if (IsNew)
+        {
+            if (!newInitialized)
+            {
+                newInitialized = true;
+                Model = new PostEditModel
+                {
+                    Status = PostStatus.Draft,
+                    AuthorName = settings.AuthorName
+                };
+                AttachModel();
+            }
+        }
+        else if (loadedId != Id)
+        {
+            existing = await Blog.GetPostByIdAsync(Id!.Value);
+            if (existing is null)
+            {
+                Navigation.NavigateTo("/admin/posts");
+                return;
+            }
+
+            loadedId = Id;
+            Model = new PostEditModel
+            {
+                Title = existing.Title,
+                Slug = existing.Slug,
+                Summary = existing.Summary,
+                ContentMarkdown = existing.ContentMarkdown,
+                CoverImageUrl = existing.CoverImageUrl,
+                Tags = existing.Tags,
+                IsFeatured = existing.IsFeatured,
+                Status = existing.Status,
+                SeoTitle = existing.SeoTitle,
+                SeoDescription = existing.SeoDescription,
+                CustomCss = existing.CustomCss,
+                CustomJs = existing.CustomJs,
+                AuthorName = existing.AuthorName
+            };
+            AttachModel();
+            RefreshPreview();
+        }
+
+        if (Saved)
+        {
+            savedMessage = "已保存。";
+            Saved = false;
+        }
+    }
+
+    private void AttachModel()
+    {
+        _editContext = new EditContext(Model);
+        _editContext.OnFieldChanged += (_, _) =>
+        {
+            _dirty = true;
+            savedMessage = null;
+        };
+        RefreshPreview();
+    }
+
+    private void OnContentBound() => RefreshPreview();
+
+    private void RefreshPreview()
+    {
+        previewHtml = Markdown.ToHtml(Model.ContentMarkdown);
+    }
+
+    private void GenerateSlug()
+    {
+        Model.Slug = SlugHelper.Create(Model.Title, "post");
+        _dirty = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        errorMessage = null;
+        savedMessage = null;
+
+        if (!_editContext.Validate())
+        {
+            errorMessage = "请先修正表单中的错误。";
+            return;
+        }
+
+        var slug = string.IsNullOrWhiteSpace(Model.Slug) ? SlugHelper.Create(Model.Title) : Model.Slug.Trim().ToLowerInvariant();
+        if (!SlugHelper.IsSane(slug))
+        {
+            errorMessage = "Slug 只能包含小写字母、数字和连字符，且不能是保留路径。";
+            return;
+        }
+
+        if (await Blog.PostSlugExistsAsync(slug, Id))
+        {
+            errorMessage = $"Slug「{slug}」已经被另一篇文章使用，请换一个。";
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var entity = existing ?? new BlogPost();
+            entity.Title = Model.Title.Trim();
+            entity.Slug = slug;
+            entity.Summary = string.IsNullOrWhiteSpace(Model.Summary)
+                ? Markdown.BuildExcerpt(Model.ContentMarkdown, 200)
+                : Model.Summary.Trim();
+            entity.ContentMarkdown = Model.ContentMarkdown;
+            entity.CoverImageUrl = string.IsNullOrWhiteSpace(Model.CoverImageUrl) ? null : Model.CoverImageUrl.Trim();
+            entity.Tags = TagHelper.Normalize(Model.Tags);
+            entity.IsFeatured = Model.IsFeatured;
+            entity.Status = Model.Status;
+            entity.SeoTitle = string.IsNullOrWhiteSpace(Model.SeoTitle) ? null : Model.SeoTitle.Trim();
+            entity.SeoDescription = string.IsNullOrWhiteSpace(Model.SeoDescription) ? null : Model.SeoDescription.Trim();
+            entity.CustomCss = string.IsNullOrWhiteSpace(Model.CustomCss) ? null : Model.CustomCss;
+            entity.CustomJs = string.IsNullOrWhiteSpace(Model.CustomJs) ? null : Model.CustomJs;
+            entity.AuthorName = string.IsNullOrWhiteSpace(Model.AuthorName) ? settings?.AuthorName ?? "墨屿主人" : Model.AuthorName;
+
+            if (entity.Status == PostStatus.Published && entity.PublishedAtUtc is null)
+            {
+                entity.PublishedAtUtc = DateTime.UtcNow;
+            }
+
+            var result = await Blog.SavePostAsync(entity);
+            existing = result;
+            loadedId = result.Id;
+            _dirty = false;
+            savedMessage = "已保存。";
+
+            if (IsNew)
+            {
+                Navigation.NavigateTo($"/admin/posts/{result.Id}/edit?saved=true", replace: true);
+            }
+            else
+            {
+                Id = result.Id;
+                RefreshPreview();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"保存失败：{ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (existing is null)
+        {
+            return;
+        }
+
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"确定删除《{existing.Title}》吗？删除后无法恢复。");
+        if (!confirmed)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await Blog.DeletePostAsync(existing.Id);
+            _dirty = false;
+            Navigation.NavigateTo("/admin/posts");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task WrapAsync(string before, string after, string placeholder)
+    {
+        var value = await JS.InvokeAsync<string>("inkEditor.wrapSelection", "post-content", before, after, placeholder);
+        Model.ContentMarkdown = value;
+        _dirty = true;
+        RefreshPreview();
+    }
+
+    private Task Bold() => WrapAsync("**", "**", "加粗文字");
+    private Task Italic() => WrapAsync("*", "*", "斜体文字");
+    private Task Heading() => WrapAsync("\n## ", "\n", "小标题");
+    private Task Quote() => WrapAsync("\n> ", "\n", "引用一句话");
+    private Task List() => WrapAsync("\n- ", "\n- ", "列表项");
+    private Task Link() => WrapAsync("[", "](https://)", "链接文字");
+    private Task Image() => WrapAsync("![", "](/images/cover-slow.svg)", "图片说明");
+    private Task CodeBlock() => WrapAsync("\n```csharp\n", "\n```\n", "代码");
+    private Task JsBlock() => WrapAsync("\n```js\n", "\n```\n", "console.log('hello');");
+
+    private void InsertJsSample()
+    {
+        if (!string.IsNullOrWhiteSpace(Model.CustomJs))
+        {
+            return;
+        }
+
+        Model.CustomJs = string.Join("\n",
+            "(() => {",
+            "  const root = document.querySelector('.prose');",
+            "  if (!root) return;",
+            "",
+            "  // 在这里操作文章内的元素，例如：",
+            "  // const demo = document.getElementById('my-demo');",
+            "  // demo?.addEventListener('click', () => { ... });",
+            "  console.log('文章脚本已加载');",
+            "})();");
+        _dirty = true;
+    }
+
+    public sealed class PostEditModel
+    {
+        [Required(ErrorMessage = "标题不能为空")]
+        [MaxLength(160, ErrorMessage = "标题不能超过 160 个字符")]
+        public string Title { get; set; } = "";
+
+        [MaxLength(160, ErrorMessage = "Slug 不能超过 160 个字符")]
+        public string? Slug { get; set; }
+
+        [MaxLength(500, ErrorMessage = "摘要不能超过 500 个字符")]
+        public string? Summary { get; set; }
+
+        public string ContentMarkdown { get; set; } = "";
+
+        [MaxLength(500, ErrorMessage = "封面地址过长")]
+        public string? CoverImageUrl { get; set; }
+
+        [MaxLength(300, ErrorMessage = "标签总长度不能超过 300 个字符")]
+        public string? Tags { get; set; }
+
+        public bool IsFeatured { get; set; }
+
+        public PostStatus Status { get; set; } = PostStatus.Draft;
+
+        [MaxLength(200, ErrorMessage = "SEO 标题不能超过 200 个字符")]
+        public string? SeoTitle { get; set; }
+
+        [MaxLength(300, ErrorMessage = "SEO 描述不能超过 300 个字符")]
+        public string? SeoDescription { get; set; }
+
+        public string? CustomCss { get; set; }
+
+        public string? CustomJs { get; set; }
+
+        public string? AuthorName { get; set; }
+    }
+}

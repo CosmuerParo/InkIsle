@@ -1,0 +1,100 @@
+@inherits LayoutComponentBase
+
+<div class="admin-shell">
+    <aside class="admin-sidebar" data-admin-sidebar>
+        <a class="admin-brand" href="/admin">
+            <span class="admin-brand-mark">墨</span>
+            <span>
+                <strong>墨屿</strong>
+                <small>WRITING DESK</small>
+            </span>
+        </a>
+
+        <nav class="admin-nav" aria-label="后台导航">
+            <span class="admin-nav-label">工作台</span>
+            <NavLink href="/admin" Match="NavLinkMatch.All">
+                <Icon Name="home" Size="18" /><span>概览</span>
+            </NavLink>
+            <NavLink href="/admin/posts">
+                <Icon Name="file" Size="18" /><span>文章</span>
+            </NavLink>
+            <NavLink href="/admin/pages">
+                <Icon Name="layers" Size="18" /><span>独立页面</span>
+            </NavLink>
+
+            <span class="admin-nav-label">站点</span>
+            <NavLink href="/admin/settings">
+                <Icon Name="settings" Size="18" /><span>站点设置</span>
+            </NavLink>
+            <NavLink href="/admin/account">
+                <Icon Name="user" Size="18" /><span>我的账号</span>
+            </NavLink>
+        </nav>
+
+        <div class="admin-sidebar-foot">
+            <a class="admin-site-link" href="/" target="_blank" rel="noopener">
+                <Icon Name="external" Size="16" />
+                查看站点
+            </a>
+            <form action="/Account/Logout" method="post">
+                <AntiforgeryToken />
+                <input type="hidden" name="returnUrl" value="" />
+                <button class="admin-logout" type="submit">
+                    <Icon Name="logout" Size="16" />
+                    退出登录
+                </button>
+            </form>
+            <span class="admin-version">INKISLE · v1.0</span>
+        </div>
+    </aside>
+
+    <div class="admin-overlay" data-admin-overlay></div>
+
+    <div class="admin-main">
+        <header class="admin-topbar">
+            <button class="admin-menu-button" type="button" data-admin-menu aria-label="打开后台菜单">
+                <Icon Name="menu" Size="20" />
+            </button>
+            <span class="admin-topbar-title">写作后台</span>
+            <div class="admin-topbar-right">
+                <a class="admin-view-site" href="/" target="_blank" rel="noopener">
+                    预览站点
+                    <Icon Name="external" Size="15" />
+                </a>
+                <AuthorizeView>
+                    <Authorized>
+                        <a class="admin-user" href="/admin/account" title="账号设置">
+                            <span class="admin-avatar">@Initial</span>
+                            <span class="admin-user-copy">
+                                <strong>@DisplayName</strong>
+                                <small>@context.User.Identity?.Name</small>
+                            </span>
+                        </a>
+                    </Authorized>
+                </AuthorizeView>
+            </div>
+        </header>
+
+        <main class="admin-content">
+            @Body
+        </main>
+    </div>
+</div>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthenticationState { get; set; }
+
+    private string DisplayName { get; set; } = "岛主";
+    private string Initial => string.IsNullOrEmpty(DisplayName) ? "墨" : DisplayName[..1];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthenticationState is not null)
+        {
+            var state = await AuthenticationState;
+            DisplayName = state.User.FindFirst("DisplayName")?.Value
+                ?? state.User.Identity?.Name?.Split('@').FirstOrDefault()
+                ?? "岛主";
+        }
+    }
+}

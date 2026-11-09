@@ -1,0 +1,27 @@
+@page "/not-found"
+<PageMeta Title="页面没有找到" Description="你抵达了一座不存在的岛。" Path="/not-found" />
+
+<section class="notfound">
+    <div class="notfound-art" aria-hidden="true">
+        <span>4</span><span class="notfound-zero">0</span><span>4</span>
+    </div>
+    <span class="eyebrow">LOST AT SEA</span>
+    <h1>这座岛还没有出现。</h1>
+    <p>链接可能已经漂走，或者你输入了一个不存在的地址。</p>
+    <div class="button-row">
+        <a class="btn btn-primary" href="/">回到首页</a>
+        <a class="btn btn-ghost" href="/blog">去读点别的</a>
+    </div>
+</section>
+
+@code {
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+
+    protected override void OnInitialized()
+    {
+        if (HttpContext is not null)
+        {
+            HttpContext.Response.StatusCode = 404;
+        }
+    }
+}

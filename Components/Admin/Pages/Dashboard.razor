@@ -1,0 +1,191 @@
+@page "/admin"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin")]
+@inject BlogService Blog
+
+<PageTitle>概览 · 墨屿写作后台</PageTitle>
+
+<div class="admin-page-head">
+    <div>
+        <span class="admin-eyebrow">DASHBOARD / @DateTime.Now.ToString("yyyy.MM.dd")</span>
+        <h1>回到书桌前</h1>
+        <p>这里是你写作的地方。今天想留下一点什么？</p>
+    </div>
+    <a class="btn btn-primary" href="/admin/posts/new">
+        <Icon Name="plus" Size="17" />
+        写新文章
+    </a>
+</div>
+
+<section class="stat-grid">
+    <article class="stat-card">
+        <div class="stat-card-top">
+            <span>已发布</span>
+            <span class="stat-icon"><Icon Name="file" Size="18" /></span>
+        </div>
+        <strong>@stats.Published</strong>
+        <small>篇公开文章</small>
+    </article>
+    <article class="stat-card">
+        <div class="stat-card-top">
+            <span>草稿</span>
+            <span class="stat-icon"><Icon Name="edit" Size="18" /></span>
+        </div>
+        <strong>@stats.Drafts</strong>
+        <small>篇等待完成</small>
+    </article>
+    <article class="stat-card">
+        <div class="stat-card-top">
+            <span>页面</span>
+            <span class="stat-icon"><Icon Name="layers" Size="18" /></span>
+        </div>
+        <strong>@stats.Pages</strong>
+        <small>个独立页面</small>
+    </article>
+    <article class="stat-card stat-card-accent">
+        <div class="stat-card-top">
+            <span>总阅读</span>
+            <span class="stat-icon"><Icon Name="eye" Size="18" /></span>
+        </div>
+        <strong>@stats.Views</strong>
+        <small>次文章访问</small>
+    </article>
+</section>
+
+<div class="admin-dashboard-grid">
+    <section class="admin-panel admin-panel-wide">
+        <div class="panel-head">
+            <div>
+                <span class="admin-eyebrow">PUBLISHING RHYTHM</span>
+                <h2>最近六个月的发布节奏</h2>
+            </div>
+            <a class="text-link" href="/admin/posts">管理文章 <Icon Name="arrow-right" Size="14" /></a>
+        </div>
+
+        <div class="mini-chart">
+            @foreach (var bar in chart)
+            {
+                <div class="mini-chart-column">
+                    <span class="mini-chart-value">@bar.Count</span>
+                    <div class="mini-chart-track">
+                        <span class="mini-chart-bar" style="height:@(bar.Height)%"></span>
+                    </div>
+                    <span class="mini-chart-label">@bar.Label</span>
+                </div>
+            }
+        </div>
+        <p class="panel-footnote">过去六个月共发布 @chart.Sum(c => c.Count) 篇文章。节奏比数量更重要。</p>
+    </section>
+
+    <section class="admin-panel">
+        <div class="panel-head">
+            <div>
+                <span class="admin-eyebrow">QUICK START</span>
+                <h2>快速开始</h2>
+            </div>
+        </div>
+        <div class="quick-actions">
+            <a href="/admin/posts/new">
+                <span class="quick-icon"><Icon Name="pen" Size="19" /></span>
+                <span><strong>写一篇文章</strong><small>从一句想说的话开始</small></span>
+                <Icon Name="arrow-right" Size="16" />
+            </a>
+            <a href="/admin/pages/new">
+                <span class="quick-icon"><Icon Name="layers" Size="19" /></span>
+                <span><strong>新建独立页面</strong><small>关于、友链或更多</small></span>
+                <Icon Name="arrow-right" Size="16" />
+            </a>
+            <a href="/admin/settings">
+                <span class="quick-icon"><Icon Name="settings" Size="19" /></span>
+                <span><strong>调整站点设置</strong><small>站名、文案与脚本</small></span>
+                <Icon Name="arrow-right" Size="16" />
+            </a>
+        </div>
+    </section>
+</div>
+
+<section class="admin-panel">
+    <div class="panel-head">
+        <div>
+            <span class="admin-eyebrow">RECENTLY EDITED</span>
+            <h2>最近编辑</h2>
+        </div>
+        <a class="text-link" href="/admin/posts">全部文章 <Icon Name="arrow-right" Size="14" /></a>
+    </div>
+
+    @if (recent.Count == 0)
+    {
+        <EmptyState Title="还没有文章" Description="写下第一篇文章，岛屿就有了第一块陆地。"
+                    ActionText="开始写作" ActionHref="/admin/posts/new" />
+    }
+    else
+    {
+        <div class="admin-table-wrap">
+            <table class="admin-table dashboard-table">
+                <thead>
+                    <tr>
+                        <th>文章</th>
+                        <th>状态</th>
+                        <th>更新时间</th>
+                        <th>阅读</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var post in recent)
+                    {
+                        <tr>
+                            <td>
+                                <a class="table-title" href="@($"/admin/posts/{post.Id}/edit")">@post.Title</a>
+                                <span class="table-slug">/blog/@post.Slug</span>
+                            </td>
+                            <td>
+                                <span class="status-badge @(post.Status == PostStatus.Published ? "is-published" : "is-draft")">
+                                    @(post.Status == PostStatus.Published ? "已发布" : "草稿")
+                                </span>
+                            </td>
+                            <td class="table-muted">@ChinaTime.FormatDateTime(post.UpdatedAtUtc)</td>
+                            <td class="table-muted">@post.ViewCount</td>
+                            <td class="table-actions">
+                                <a href="@($"/admin/posts/{post.Id}/edit")" aria-label="编辑"><Icon Name="edit" Size="16" /></a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+<section class="admin-tip">
+    <span class="admin-tip-mark">“</span>
+    <p>后台的每一篇文章都可以附加自定义 CSS 与 JavaScript。它们只对这篇文章生效，用来放一些需要动手试一试的小实验。</p>
+    <a class="text-link" href="/blog/embed-javascript-in-blog" target="_blank">看一个例子 <Icon Name="external" Size="14" /></a>
+</section>
+
+@code {
+    private AdminStats stats = new(0, 0, 0, 0, 0);
+    private List<BlogPost> recent = [];
+    private List<(string Label, int Count, int Height)> chart = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        stats = await Blog.GetAdminStatsAsync();
+        recent = await Blog.GetRecentForAdminAsync(5);
+        var monthly = await Blog.GetMonthlyPublishedAsync(6);
+        var now = ChinaTime.FromUtc(DateTime.UtcNow);
+
+        var months = Enumerable.Range(0, 6)
+            .Select(offset => now.AddMonths(offset - 5))
+            .Select(date => new { date.Year, date.Month, Label = $"{date.Month}月" })
+            .ToList();
+
+        var counts = monthly
+            .GroupBy(p => new { ChinaTime.FromUtc(p.PublishedAtUtc ?? p.CreatedAtUtc).Year, ChinaTime.FromUtc(p.PublishedAtUtc ?? p.CreatedAtUtc).Month })
+            .ToDictionary(g => (g.Key.Year, g.Key.Month), g => g.Count());
+
+        var raw = months.Select(m => (m.Label, Count: counts.GetValueOrDefault((m.Year, m.Month)))).ToList();
+        var max = Math.Max(1, raw.Max(x => x.Count));
+        chart = raw.Select(x => (x.Label, x.Count, x.Count == 0 ? 4 : Math.Max(12, (int)Math.Round(x.Count * 100d / max)))).ToList();
+    }
+}

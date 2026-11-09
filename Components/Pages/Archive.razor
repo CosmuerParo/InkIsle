@@ -1,0 +1,62 @@
+@page "/archive"
+@inject BlogService Blog
+
+<PageMeta Title="归档" Description="墨屿全部文章的年份与月份索引。" Path="/archive" />
+
+<section class="page-hero archive-hero">
+    <div class="page-hero-inner">
+        <div>
+            <span class="eyebrow">THE ARCHIVE</span>
+            <h1>时间的抽屉</h1>
+            <p>文章按时间收好。偶尔回头，会看到一条自己走过的路。</p>
+        </div>
+        <div class="page-hero-aside">
+            <span class="big-count">@total</span>
+            <span>篇，跨越 @groups.Count 年</span>
+        </div>
+    </div>
+</section>
+
+<section class="archive-shell">
+    @if (groups.Count == 0)
+    {
+        <EmptyState Title="抽屉还是空的" Description="等第一篇文章写完之后，这里就会有回声。" />
+    }
+    else
+    {
+        @foreach (var group in groups)
+        {
+            <section class="archive-year">
+                <div class="archive-year-heading">
+                    <h2>@group.Year</h2>
+                    <span>@group.Posts.Count 篇</span>
+                </div>
+                <div class="archive-list">
+                    @foreach (var post in group.Posts)
+                    {
+                        <a class="archive-item" href="@($"/blog/{post.Slug}")">
+                            <time datetime="@post.PublishedAtUtc?.ToString("yyyy-MM-dd")">@ChinaTime.FromUtc(post.PublishedAtUtc ?? post.CreatedAtUtc).ToString("MM.dd")</time>
+                            <span class="archive-item-main">
+                                <strong>@post.Title</strong>
+                                <small>@post.TagList.FirstOrDefault()</small>
+                            </span>
+                            <span class="archive-item-time">@ReadingTime.EstimateMinutes(post.ContentMarkdown) min</span>
+                            <Icon Name="arrow-right" Size="16" />
+                        </a>
+                    }
+                </div>
+            </section>
+        }
+    }
+</section>
+
+@code {
+    private List<ArchiveGroup> groups = [];
+    private int total;
+
+    protected override async Task OnInitializedAsync()
+    {
+        groups = await Blog.GetArchiveAsync();
+        total = groups.Sum(g => g.Posts.Count);
+    }
+}

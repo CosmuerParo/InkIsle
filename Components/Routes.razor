@@ -1,0 +1,18 @@
+@using InkIsle.Components.Account.Shared
+@using InkIsle.Components.Pages
+
+<Router AppAssembly="typeof(Program).Assembly">
+    <Found Context="routeData">
+        <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(PublicLayout)">
+            <NotAuthorized>
+                <RedirectToLogin />
+            </NotAuthorized>
+        </AuthorizeRouteView>
+        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+    </Found>
+    <NotFound>
+        <LayoutView Layout="typeof(PublicLayout)">
+            <NotFoundPage />
+        </LayoutView>
+    </NotFound>
+</Router>

@@ -1,0 +1,54 @@
+@using InkIsle.Data
+
+<article class="post-card @(Featured ? "post-card-featured" : "")">
+    <a class="post-card-link" href="@($"/blog/{Post.Slug}")">
+        <div class="post-cover cover-tone-@((Post.Id % 4) + 1)">
+            @if (!string.IsNullOrWhiteSpace(Post.CoverImageUrl))
+            {
+                <img src="@Post.CoverImageUrl" alt="@Post.Title 封面" loading="lazy" />
+            }
+            else
+            {
+                <div class="post-cover-art" aria-hidden="true">
+                    <span class="cover-ring"></span>
+                    <span class="cover-glyph">@Glyph</span>
+                    <span class="cover-lines"></span>
+                </div>
+            }
+            <span class="post-number">@Index.ToString("00")</span>
+            @if (Post.TagList.Count > 0)
+            {
+                <span class="post-cover-tag">@Post.TagList[0]</span>
+            }
+        </div>
+
+        <div class="post-card-body">
+            <div class="post-meta">
+                <time datetime="@Post.PublishedAtUtc?.ToString("yyyy-MM-dd")">@Post.DisplayDate</time>
+                <span class="meta-dot"></span>
+                <span>@ReadingTime.EstimateMinutes(Post.ContentMarkdown) 分钟阅读</span>
+            </div>
+            <h3>@Post.Title</h3>
+            <p>@(string.IsNullOrWhiteSpace(Post.Summary) ? BuildExcerpt(Post.ContentMarkdown) : Post.Summary)</p>
+            <span class="read-more">阅读全文 <Icon Name="arrow-right" Size="16" /></span>
+        </div>
+    </a>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public BlogPost Post { get; set; } = default!;
+    [Parameter] public int Index { get; set; } = 1;
+    [Parameter] public bool Featured { get; set; }
+    [Inject] private MarkdownService Markdown { get; set; } = default!;
+
+    private string Glyph
+    {
+        get
+        {
+            var first = Post.Title.FirstOrDefault(c => !char.IsWhiteSpace(c) && !char.IsPunctuation(c));
+            return first == default ? "墨" : first.ToString();
+        }
+    }
+
+    private string BuildExcerpt(string markdown) => Markdown.BuildExcerpt(markdown, 120);
+}

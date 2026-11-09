@@ -1,0 +1,155 @@
+@page "/admin/posts"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin")]
+@rendermode InteractiveServer
+@inject BlogService Blog
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<PageTitle>文章管理 · 墨屿写作后台</PageTitle>
+
+<div class="admin-page-head">
+    <div>
+        <span class="admin-eyebrow">CONTENT / POSTS</span>
+        <h1>文章</h1>
+        <p>所有草稿与已发布内容。共 @all.Count 篇。</p>
+    </div>
+    <a class="btn btn-primary" href="/admin/posts/new">
+        <Icon Name="plus" Size="17" />
+        写新文章
+    </a>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="form-alert form-alert-success">@message</div>
+}
+
+<section class="admin-panel">
+    <div class="admin-list-toolbar">
+        <div class="filter-tabs">
+            <button class="filter-tab @(filter == "all" ? "is-active" : "")" type="button" @onclick='() => filter = "all"'
+>
+                全部 <span>@all.Count</span>
+            </button>
+            <button class="filter-tab @(filter == "published" ? "is-active" : "")" type="button" @onclick='() => filter = "published"'
+>
+                已发布 <span>@all.Count(p => p.Status == PostStatus.Published)</span>
+            </button>
+            <button class="filter-tab @(filter == "draft" ? "is-active" : "")" type="button" @onclick='() => filter = "draft"'
+>
+                草稿 <span>@all.Count(p => p.Status == PostStatus.Draft)</span>
+            </button>
+        </div>
+        <div class="admin-search">
+            <Icon Name="search" Size="16" />
+            <input type="search" @bind="search" @bind:event="oninput" placeholder="搜索标题或 Slug…" />
+        </div>
+    </div>
+
+    @if (Filtered.Count == 0)
+    {
+        <EmptyState Title="这里没有文章" Description="换一个筛选条件，或者开始写一篇新的。"
+                    ActionText="写新文章" ActionHref="/admin/posts/new" />
+    }
+    else
+    {
+        <div class="admin-table-wrap">
+            <table class="admin-table post-admin-table">
+                <thead>
+                    <tr>
+                        <th>标题</th>
+                        <th>状态</th>
+                        <th>标签</th>
+                        <th>更新</th>
+                        <th>阅读</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var post in Filtered)
+                    {
+                        <tr>
+                            <td>
+                                <div class="table-title-row">
+                                    @if (post.IsFeatured)
+                                    {
+                                        <span class="featured-mark" title="首页推荐">★</span>
+                                    }
+                                    <a class="table-title" href="@($"/admin/posts/{post.Id}/edit")">@post.Title</a>
+                                </div>
+                                <span class="table-slug">/blog/@post.Slug</span>
+                            </td>
+                            <td>
+                                <span class="status-badge @(post.Status == PostStatus.Published ? "is-published" : "is-draft")">
+                                    @(post.Status == PostStatus.Published ? "已发布" : "草稿")
+                                </span>
+                            </td>
+                            <td>
+                                <div class="table-tags">
+                                    @foreach (var tag in post.TagList.Take(2))
+                                    {
+                                        <span>#@tag</span>
+                                    }
+                                </div>
+                            </td>
+                            <td class="table-muted">@ChinaTime.FormatDate(post.UpdatedAtUtc)</td>
+                            <td class="table-muted">@post.ViewCount</td>
+                            <td class="table-actions">
+                                @if (post.Status == PostStatus.Published)
+                                {
+                                    <a href="@($"/blog/{post.Slug}")" target="_blank" rel="noopener" title="查看" aria-label="查看文章">
+                                        <Icon Name="external" Size="16" />
+                                    </a>
+                                }
+                                <a href="@($"/admin/posts/{post.Id}/edit")" title="编辑" aria-label="编辑文章">
+                                    <Icon Name="edit" Size="16" />
+                                </a>
+                                <button type="button" class="danger-link" title="删除" aria-label="删除文章" @onclick="() => DeleteAsync(post)">
+                                    <Icon Name="trash" Size="16" />
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@code {
+    private List<BlogPost> all = [];
+    private string filter = "all";
+    private string? search;
+    private string? message;
+
+    private List<BlogPost> Filtered => all
+        .Where(p => filter switch
+        {
+            "published" => p.Status == PostStatus.Published,
+            "draft" => p.Status == PostStatus.Draft,
+            _ => true
+        })
+        .Where(p => string.IsNullOrWhiteSpace(search)
+            || p.Title.Contains(search, StringComparison.OrdinalIgnoreCase)
+            || p.Slug.Contains(search, StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        all = await Blog.GetAllPostsAsync();
+    }
+
+    private async Task DeleteAsync(BlogPost post)
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"确定删除《{post.Title}》吗？此操作不可恢复。");
+        if (!confirmed)
+        {
+            return;
+        }
+
+        await Blog.DeletePostAsync(post.Id);
+        all.RemoveAll(p => p.Id == post.Id);
+        message = $"已删除《{post.Title}》。";
+    }
+}

@@ -1,0 +1,384 @@
+@page "/admin/pages/new"
+@page "/admin/pages/{Id:int}/edit"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin")]
+@rendermode InteractiveServer
+@inject BlogService Blog
+@inject MarkdownService Markdown
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<PageTitle>@(IsNew ? "新建页面" : "编辑页面") · 墨屿写作后台</PageTitle>
+
+<div class="editor-head">
+    <div>
+        <nav class="admin-breadcrumb">
+            <a href="/admin/pages">独立页面</a>
+            <span>/</span>
+            <span>@(IsNew ? "新建" : "编辑")</span>
+        </nav>
+        <h1>@(IsNew ? "新建一个页面" : "编辑页面")</h1>
+    </div>
+    <div class="editor-head-actions">
+        @if (!IsNew && existing?.IsPublished == true)
+        {
+            <a class="btn btn-ghost" href="@($"/{existing.Slug}")" target="_blank">
+                <Icon Name="external" Size="16" />
+                查看
+            </a>
+        }
+        <button class="btn btn-primary" type="button" @onclick="SaveAsync" disabled="@_busy">
+            <Icon Name="check" Size="17" />
+            保存
+        </button>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="form-alert form-alert-error">@errorMessage</div>
+}
+@if (!string.IsNullOrWhiteSpace(savedMessage))
+{
+    <div class="form-alert form-alert-success">@savedMessage</div>
+}
+
+<EditForm EditContext="_editContext" class="editor-form">
+    <DataAnnotationsValidator />
+    <div class="editor-layout">
+        <div class="editor-primary">
+            <section class="editor-title-card">
+                <InputText class="editor-title-input" @bind-Value="Model.Title" placeholder="页面标题…" />
+                <ValidationMessage For="() => Model.Title" class="field-error" />
+                <div class="slug-editor">
+                    <span class="slug-prefix">/</span>
+                    <InputText class="slug-input" @bind-Value="Model.Slug" placeholder="about" />
+                    <button class="slug-generate" type="button" @onclick="GenerateSlug">从标题生成</button>
+                </div>
+                <p class="field-help">页面地址只支持小写字母、数字与连字符。</p>
+            </section>
+
+            <section class="editor-workspace">
+                <div class="editor-toolbar">
+                    <div class="toolbar-group">
+                        <button type="button" title="加粗" @onclick="Bold"><Icon Name="bold" Size="16" /></button>
+                        <button type="button" title="斜体" @onclick="Italic" class="toolbar-italic">I</button>
+                        <button type="button" title="二级标题" @onclick="Heading"><Icon Name="heading" Size="16" /></button>
+                        <button type="button" title="引用" @onclick="Quote"><Icon Name="quote" Size="16" /></button>
+                        <button type="button" title="列表" @onclick="List"><Icon Name="list" Size="16" /></button>
+                    </div>
+                    <div class="toolbar-group">
+                        <button type="button" title="链接" @onclick="Link"><Icon Name="link" Size="16" /></button>
+                        <button type="button" title="图片" @onclick="Image"><Icon Name="image" Size="16" /></button>
+                        <button type="button" title="代码块" @onclick="CodeBlock"><Icon Name="code" Size="16" /></button>
+                    </div>
+                    <div class="toolbar-spacer"></div>
+                    <button class="toolbar-refresh" type="button" @onclick="RefreshPreview">
+                        <Icon Name="spark" Size="15" />
+                        刷新预览
+                    </button>
+                </div>
+
+                <div class="editor-panes">
+                    <div class="editor-pane">
+                        <div class="pane-label">MARKDOWN</div>
+                        <InputTextArea id="page-content" class="markdown-textarea" @bind-Value="Model.ContentMarkdown"
+                                       @bind-Value:after="RefreshPreview" placeholder="页面内容… 支持 Markdown 与内嵌 HTML。" spellcheck="false" />
+                    </div>
+                    <div class="editor-pane preview-pane">
+                        <div class="pane-label">PREVIEW</div>
+                        @if (string.IsNullOrWhiteSpace(previewHtml))
+                        {
+                            <div class="preview-empty"><span>预览会出现在这里</span></div>
+                        }
+                        else
+                        {
+                            <div class="prose preview-prose">@((MarkupString)previewHtml)</div>
+                        }
+                    </div>
+                </div>
+            </section>
+
+            <section class="editor-card">
+                <h2>摘要</h2>
+                <p class="field-help">用于页面描述与搜索结果。</p>
+                <InputTextArea class="input" @bind-Value="Model.Summary" rows="3" placeholder="一两句话介绍这个页面…" />
+            </section>
+
+            <section class="editor-card">
+                <details class="advanced-section">
+                    <summary><span><Icon Name="code" Size="17" /> 自定义 CSS 与 JavaScript</span></summary>
+                    <div class="advanced-body">
+                        <div class="form-note form-note-warning">
+                            脚本会在这个页面加载后执行，拥有页面权限。请只添加可信代码。
+                        </div>
+                        <div class="field">
+                            <label>自定义 CSS</label>
+                            <InputTextArea class="input code-textarea" @bind-Value="Model.CustomCss" rows="6" spellcheck="false" />
+                        </div>
+                        <div class="field">
+                            <label>自定义 JavaScript</label>
+                            <InputTextArea class="input code-textarea" @bind-Value="Model.CustomJs" rows="8" spellcheck="false" />
+                        </div>
+                    </div>
+                </details>
+            </section>
+
+            <section class="editor-card">
+                <details class="advanced-section">
+                    <summary><span><Icon Name="search" Size="17" /> SEO 设置</span></summary>
+                    <div class="advanced-body">
+                        <div class="field">
+                            <label>SEO 标题</label>
+                            <InputText class="input" @bind-Value="Model.SeoTitle" placeholder="留空使用页面标题" />
+                        </div>
+                        <div class="field">
+                            <label>SEO 描述</label>
+                            <InputTextArea class="input" @bind-Value="Model.SeoDescription" rows="3" />
+                        </div>
+                    </div>
+                </details>
+            </section>
+        </div>
+
+        <aside class="editor-sidebar">
+            <section class="editor-side-card">
+                <h2>页面设置</h2>
+                <label class="switch-row">
+                    <span><strong>公开页面</strong><small>关闭后仅后台可见</small></span>
+                    <InputCheckbox @bind-Value="Model.IsPublished" />
+                </label>
+                <label class="switch-row">
+                    <span><strong>显示在导航</strong><small>出现在站点顶部与页脚</small></span>
+                    <InputCheckbox @bind-Value="Model.ShowInNavigation" />
+                </label>
+                <div class="field">
+                    <label>导航排序</label>
+                    <InputNumber class="input" @bind-Value="Model.SortOrder" />
+                    <p class="field-help">数字越小越靠前。</p>
+                </div>
+                <button class="btn btn-primary btn-block" type="button" @onclick="SaveAsync" disabled="@_busy">保存页面</button>
+                @if (!IsNew)
+                {
+                    <button class="btn btn-danger-ghost btn-block" type="button" @onclick="DeleteAsync" disabled="@_busy">
+                        <Icon Name="trash" Size="16" />
+                        删除页面
+                    </button>
+                }
+            </section>
+
+            <div class="editor-side-note">
+                <Icon Name="spark" Size="17" />
+                <p>独立页面适合放长期有效的内容。它们和文章一样支持自定义 CSS / JS。</p>
+            </div>
+        </aside>
+    </div>
+</EditForm>
+
+<NavigationLock ConfirmExternalNavigation="_dirty" />
+
+@code {
+    [Parameter] public int? Id { get; set; }
+
+    private PageEditModel Model { get; set; } = new();
+    private EditContext _editContext = new(new PageEditModel());
+    private BlogPage? existing;
+    private string previewHtml = "";
+    private string? errorMessage;
+    private string? savedMessage;
+    private bool _busy;
+    private bool _dirty;
+    private int? loadedId;
+    private bool newInitialized;
+
+    private bool IsNew => Id is null;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsNew)
+        {
+            if (!newInitialized)
+            {
+                newInitialized = true;
+                Model = new PageEditModel { IsPublished = true };
+                AttachModel();
+            }
+        }
+        else if (loadedId != Id)
+        {
+            existing = await Blog.GetPageByIdAsync(Id!.Value);
+            if (existing is null)
+            {
+                Navigation.NavigateTo("/admin/pages");
+                return;
+            }
+
+            loadedId = Id;
+            Model = new PageEditModel
+            {
+                Title = existing.Title,
+                Slug = existing.Slug,
+                Summary = existing.Summary,
+                ContentMarkdown = existing.ContentMarkdown,
+                IsPublished = existing.IsPublished,
+                ShowInNavigation = existing.ShowInNavigation,
+                SortOrder = existing.SortOrder,
+                SeoTitle = existing.SeoTitle,
+                SeoDescription = existing.SeoDescription,
+                CustomCss = existing.CustomCss,
+                CustomJs = existing.CustomJs
+            };
+            AttachModel();
+        }
+    }
+
+    private void AttachModel()
+    {
+        _editContext = new EditContext(Model);
+        _editContext.OnFieldChanged += (_, _) =>
+        {
+            _dirty = true;
+            savedMessage = null;
+        };
+        RefreshPreview();
+    }
+
+    private void RefreshPreview() => previewHtml = Markdown.ToHtml(Model.ContentMarkdown);
+
+    private void GenerateSlug()
+    {
+        Model.Slug = SlugHelper.Create(Model.Title, "page");
+        _dirty = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        errorMessage = null;
+        savedMessage = null;
+
+        if (!_editContext.Validate())
+        {
+            errorMessage = "请先修正表单中的错误。";
+            return;
+        }
+
+        var slug = string.IsNullOrWhiteSpace(Model.Slug) ? SlugHelper.Create(Model.Title, "page") : Model.Slug.Trim().ToLowerInvariant();
+        if (!SlugHelper.IsSane(slug))
+        {
+            errorMessage = "Slug 只能包含小写字母、数字和连字符，且不能是保留路径。";
+            return;
+        }
+
+        if (await Blog.PageSlugExistsAsync(slug, Id))
+        {
+            errorMessage = $"Slug「{slug}」已被其他页面使用。";
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var page = existing ?? new BlogPage();
+            page.Title = Model.Title.Trim();
+            page.Slug = slug;
+            page.Summary = string.IsNullOrWhiteSpace(Model.Summary) ? Markdown.BuildExcerpt(Model.ContentMarkdown, 200) : Model.Summary.Trim();
+            page.ContentMarkdown = Model.ContentMarkdown;
+            page.IsPublished = Model.IsPublished;
+            page.ShowInNavigation = Model.ShowInNavigation;
+            page.SortOrder = Model.SortOrder;
+            page.SeoTitle = string.IsNullOrWhiteSpace(Model.SeoTitle) ? null : Model.SeoTitle.Trim();
+            page.SeoDescription = string.IsNullOrWhiteSpace(Model.SeoDescription) ? null : Model.SeoDescription.Trim();
+            page.CustomCss = string.IsNullOrWhiteSpace(Model.CustomCss) ? null : Model.CustomCss;
+            page.CustomJs = string.IsNullOrWhiteSpace(Model.CustomJs) ? null : Model.CustomJs;
+
+            var result = await Blog.SavePageAsync(page);
+            existing = result;
+            loadedId = result.Id;
+            _dirty = false;
+            savedMessage = "已保存。";
+
+            if (IsNew)
+            {
+                Navigation.NavigateTo($"/admin/pages/{result.Id}/edit?saved=true", replace: true);
+            }
+            else
+            {
+                Id = result.Id;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"保存失败：{ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (existing is null)
+        {
+            return;
+        }
+
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"确定删除页面「{existing.Title}」吗？");
+        if (!confirmed)
+        {
+            return;
+        }
+
+        await Blog.DeletePageAsync(existing.Id);
+        _dirty = false;
+        Navigation.NavigateTo("/admin/pages");
+    }
+
+    private async Task WrapAsync(string before, string after, string placeholder)
+    {
+        var value = await JS.InvokeAsync<string>("inkEditor.wrapSelection", "page-content", before, after, placeholder);
+        Model.ContentMarkdown = value;
+        _dirty = true;
+        RefreshPreview();
+    }
+
+    private Task Bold() => WrapAsync("**", "**", "加粗文字");
+    private Task Italic() => WrapAsync("*", "*", "斜体文字");
+    private Task Heading() => WrapAsync("\n## ", "\n", "小标题");
+    private Task Quote() => WrapAsync("\n> ", "\n", "引用一句话");
+    private Task List() => WrapAsync("\n- ", "\n- ", "列表项");
+    private Task Link() => WrapAsync("[", "](https://)", "链接文字");
+    private Task Image() => WrapAsync("![", "](/images/cover-slow.svg)", "图片说明");
+    private Task CodeBlock() => WrapAsync("\n```\n", "\n```\n", "代码");
+
+    public sealed class PageEditModel
+    {
+        [Required(ErrorMessage = "标题不能为空")]
+        [MaxLength(160, ErrorMessage = "标题不能超过 160 个字符")]
+        public string Title { get; set; } = "";
+
+        [MaxLength(160)]
+        public string? Slug { get; set; }
+
+        [MaxLength(500, ErrorMessage = "摘要不能超过 500 个字符")]
+        public string? Summary { get; set; }
+
+        public string ContentMarkdown { get; set; } = "";
+
+        public bool IsPublished { get; set; } = true;
+
+        public bool ShowInNavigation { get; set; }
+
+        public int SortOrder { get; set; }
+
+        [MaxLength(200)]
+        public string? SeoTitle { get; set; }
+
+        [MaxLength(300)]
+        public string? SeoDescription { get; set; }
+
+        public string? CustomCss { get; set; }
+
+        public string? CustomJs { get; set; }
+    }
+}

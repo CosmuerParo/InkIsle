@@ -1,0 +1,50 @@
+@page "/tag/{Name}"
+@inject BlogService Blog
+
+<PageMeta Title="@($"话题：{Name}")" Description="@($"浏览墨屿中关于 {Name} 的文章。")" Path="@($"/tag/{Name}")" />
+
+<section class="page-hero tag-hero">
+    <div class="page-hero-inner">
+        <div>
+            <span class="eyebrow">TOPIC</span>
+            <h1><span class="tag-hash">#</span>@Name</h1>
+            <p>沿着这个关键词，继续向岛内走。</p>
+        </div>
+        <div class="page-hero-aside">
+            <span class="big-count">@result.Total</span>
+            <span>篇文章</span>
+        </div>
+    </div>
+</section>
+
+<section class="listing-shell">
+    @if (result.Items.Count == 0)
+    {
+        <EmptyState Title="这个话题下还没有文章" Description="去别处看看，或者回到全部文章。" ActionText="全部文章" ActionHref="/blog" />
+    }
+    else
+    {
+        <div class="post-grid listing-grid">
+            @for (var i = 0; i < result.Items.Count; i++)
+            {
+                <PostCard Post="result.Items[i]" Index="i + 1" />
+            }
+        </div>
+        <Pagination Page="result.Page" TotalPages="result.TotalPages" BasePath="@($"/tag/{Name}")" />
+    }
+</section>
+
+@code {
+    [Parameter] public string Name { get; set; } = "";
+
+    [SupplyParameterFromQuery(Name = "page")]
+    public int Page { get; set; } = 1;
+
+    private PagedPosts result = new([], 0, 1, 12);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Page = Math.Max(1, Page);
+        result = await Blog.GetPublishedAsync(Page, 12, tag: Name);
+    }
+}

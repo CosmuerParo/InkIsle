@@ -1,0 +1,32 @@
+@using System.Text
+
+@if (hasCss || hasJs)
+{
+    <span id="@Id" class="custom-assets-holder" hidden
+          data-custom-assets
+          data-token="@token"
+          data-css="@EncodedCss"
+          data-js="@EncodedJs"></span>
+}
+
+@code {
+    [Parameter] public string Id { get; set; } = "page-assets";
+    [Parameter] public string? Css { get; set; }
+    [Parameter] public string? Js { get; set; }
+
+    private readonly string token = Guid.NewGuid().ToString("N");
+    private bool hasCss => !string.IsNullOrWhiteSpace(Css);
+    private bool hasJs => !string.IsNullOrWhiteSpace(Js);
+    private string EncodedCss => Encode(Css);
+    private string EncodedJs => Encode(Js);
+
+    private static string Encode(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "";
+        }
+
+        return Convert.ToBase64String(Encoding.UTF8.GetBytes(value));
+    }
+}

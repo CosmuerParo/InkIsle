@@ -1,0 +1,78 @@
+@page "/{Slug}"
+@inject BlogService Blog
+@inject MarkdownService Markdown
+
+@if (contentPage is null)
+{
+    <PageMeta Title="页面没有找到" Description="你抵达了一座不存在的岛。" Path="@($"/{Slug}")" />
+    <section class="notfound">
+        <span class="eyebrow">404 · LOST AT SEA</span>
+        <h1>这座岛还没有出现。</h1>
+        <p>链接可能已经漂走，或者你输入了一个不存在的地址。</p>
+        <div class="button-row">
+            <a class="btn btn-primary" href="/">回到首页</a>
+            <a class="btn btn-ghost" href="/blog">去读点别的</a>
+        </div>
+    </section>
+}
+else
+{
+    <PageMeta Title="@(contentPage.SeoTitle ?? contentPage.Title)"
+              Description="@(contentPage.SeoDescription ?? contentPage.Summary)"
+              Path="@($"/{contentPage.Slug}")" />
+
+    <CustomAssets Id="page-assets" Css="@contentPage.CustomCss" Js="@contentPage.CustomJs" />
+
+    <article class="standalone-page">
+        <header class="standalone-header">
+            <span class="eyebrow">A PAGE FROM THE ISLAND</span>
+            <h1>@contentPage.Title</h1>
+            @if (!string.IsNullOrWhiteSpace(contentPage.Summary))
+            {
+                <p>@contentPage.Summary</p>
+            }
+            <span class="standalone-updated">最后更新于 @ChinaTime.FormatDate(contentPage.UpdatedAtUtc)</span>
+        </header>
+
+        <div class="prose standalone-prose">
+            @((MarkupString)html)
+        </div>
+
+        <div class="standalone-footer">
+            <a class="text-link" href="/">回到首页 <Icon Name="arrow-right" Size="15" /></a>
+            <a class="text-link" href="/blog">继续阅读 <Icon Name="arrow-right" Size="15" /></a>
+        </div>
+    </article>
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+
+    private BlogPage? contentPage;
+    private string html = "";
+    private string? loadedSlug;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedSlug == Slug)
+        {
+            return;
+        }
+
+        loadedSlug = Slug;
+        contentPage = await Blog.GetPublishedPageAsync(Slug);
+        if (contentPage is null)
+        {
+            if (HttpContext is not null)
+            {
+                HttpContext.Response.StatusCode = 404;
+            }
+
+            return;
+        }
+
+        html = Markdown.ToHtml(contentPage.ContentMarkdown);
+    }
+}

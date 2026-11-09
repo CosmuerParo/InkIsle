@@ -1,0 +1,14 @@
+@inherits LayoutComponentBase
+@if (HttpContext is null)
+{
+    <p class="auth-loading">正在载入…</p>
+}
+else
+{
+    @Body
+}
+
+@code {
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+}

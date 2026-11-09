@@ -1,0 +1,236 @@
+@page "/blog/{Slug}"
+@inject BlogService Blog
+@inject MarkdownService Markdown
+@inject SiteSettingsService SettingsService
+@inject NavigationManager Navigation
+
+@if (post is null)
+{
+    <PageMeta Title="文章没有找到" Description="你抵达了一座不存在的岛。" Path="@($"/blog/{Slug}")" />
+    <section class="notfound">
+        <span class="eyebrow">404 · LOST AT SEA</span>
+        <h1>这篇文章不在这座岛上。</h1>
+        <p>它可能被移走了，或者还只是一篇草稿。</p>
+        <div class="button-row">
+            <a class="btn btn-primary" href="/blog">返回文章列表</a>
+            <a class="btn btn-ghost" href="/">回到首页</a>
+        </div>
+    </section>
+}
+else
+{
+    <PageMeta Title="@(post.SeoTitle ?? post.Title)"
+              Description="@(post.SeoDescription ?? post.Summary)"
+              Path="@($"/blog/{post.Slug}")"
+              ImageUrl="@post.CoverImageUrl"
+              OgType="article"
+              JsonLd="@JsonLd" />
+
+    <CustomAssets Id="post-assets" Css="@post.CustomCss" Js="@post.CustomJs" />
+
+    <article class="article">
+        <header class="article-header">
+            <nav class="breadcrumb" aria-label="面包屑">
+                <a href="/">首页</a>
+                <span>/</span>
+                <a href="/blog">文章</a>
+                @if (post.TagList.Count > 0)
+                {
+                    <span>/</span>
+                    <span>@post.TagList[0]</span>
+                }
+            </nav>
+
+            <div class="article-kicker">
+                @foreach (var tag in post.TagList)
+                {
+                    <a href="@($"/tag/{Uri.EscapeDataString(tag)}")">#@tag</a>
+                }
+            </div>
+
+            <h1>@post.Title</h1>
+            @if (!string.IsNullOrWhiteSpace(post.Summary))
+            {
+                <p class="article-summary">@post.Summary</p>
+            }
+
+            <div class="article-meta">
+                <div class="author-mini">
+                    <span class="author-avatar">墨</span>
+                    <span><strong>@post.AuthorName</strong><small>写作者</small></span>
+                </div>
+                <span class="meta-divider"></span>
+                <time datetime="@post.PublishedAtUtc?.ToString("yyyy-MM-dd")">@post.DisplayDate</time>
+                <span class="meta-dot"></span>
+                <span>@readingMinutes 分钟阅读</span>
+                <span class="meta-dot"></span>
+                <span><Icon Name="eye" Size="15" /> @post.ViewCount 次阅读</span>
+            </div>
+        </header>
+
+        @if (!string.IsNullOrWhiteSpace(post.CoverImageUrl))
+        {
+            <figure class="article-cover">
+                <img src="@post.CoverImageUrl" alt="@post.Title 封面" />
+            </figure>
+        }
+
+        <div class="article-layout">
+            @if (headings.Count > 0)
+            {
+                <aside class="article-toc">
+                    <span class="toc-label">ON THIS PAGE</span>
+                    <nav>
+                        @foreach (var heading in headings)
+                        {
+                            <a class="toc-level-@heading.Level" href="#@heading.Id">@heading.Text</a>
+                        }
+                    </nav>
+                    <button class="toc-top" type="button" data-back-to-top>回到顶部 ↑</button>
+                </aside>
+            }
+
+            <div class="article-main">
+                <div class="prose">
+                    @((MarkupString)html)
+                </div>
+
+                <div class="article-end">
+                    <span class="end-mark">· 完 ·</span>
+                </div>
+
+                <div class="article-footer">
+                    <div class="article-tags">
+                        @foreach (var tag in post.TagList)
+                        {
+                            <TagPill Tag="@tag" />
+                        }
+                    </div>
+                    <button class="share-button" type="button" data-copy-link>
+                        <Icon Name="link" Size="16" />
+                        复制本文链接
+                    </button>
+                </div>
+
+                <div class="author-card">
+                    <span class="author-card-avatar">墨</span>
+                    <div>
+                        <span class="eyebrow">ABOUT THE AUTHOR</span>
+                        <h3>@post.AuthorName</h3>
+                        <p>@settings?.AuthorBio</p>
+                        <a class="text-link" href="/about">了解更多 <Icon Name="arrow-right" Size="14" /></a>
+                    </div>
+                </div>
+
+                @if (neighbors.Newer is not null || neighbors.Older is not null)
+                {
+                    <nav class="article-neighbors" aria-label="上一篇和下一篇">
+                        @if (neighbors.Older is not null)
+                        {
+                            <a href="@($"/blog/{neighbors.Older.Slug}")" class="neighbor older">
+                                <span>← 更早</span>
+                                <strong>@neighbors.Older.Title</strong>
+                            </a>
+                        }
+                        else
+                        {
+                            <span></span>
+                        }
+                        @if (neighbors.Newer is not null)
+                        {
+                            <a href="@($"/blog/{neighbors.Newer.Slug}")" class="neighbor newer">
+                                <span>更新 →</span>
+                                <strong>@neighbors.Newer.Title</strong>
+                            </a>
+                        }
+                    </nav>
+                }
+            </div>
+        </div>
+    </article>
+
+    @if (related.Count > 0)
+    {
+        <section class="section related-section">
+            <div class="section-heading">
+                <div>
+                    <span class="eyebrow">KEEP READING</span>
+                    <h2>也许你还会喜欢</h2>
+                </div>
+                <a class="text-link" href="/blog">全部文章 <Icon Name="arrow-right" Size="15" /></a>
+            </div>
+            <div class="post-grid">
+                @for (var i = 0; i < related.Count; i++)
+                {
+                    <PostCard Post="related[i]" Index="i + 1" />
+                }
+            </div>
+        </section>
+    }
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+
+    private BlogPost? post;
+    private SiteSettings? settings;
+    private string html = "";
+    private IReadOnlyList<HeadingLink> headings = [];
+    private List<BlogPost> related = [];
+    private PostNeighbors neighbors = new(null, null);
+    private string? loadedSlug;
+    private int readingMinutes = 1;
+
+    private string JsonLd => System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object?>
+    {
+        ["@context"] = "https://schema.org",
+        ["@type"] = "BlogPosting",
+        ["headline"] = post?.Title,
+        ["description"] = post?.Summary,
+        ["datePublished"] = post?.PublishedAtUtc?.ToString("O"),
+        ["dateModified"] = post?.UpdatedAtUtc.ToString("O"),
+        ["author"] = new Dictionary<string, object?>
+        {
+            ["@type"] = "Person",
+            ["name"] = post?.AuthorName
+        },
+        ["publisher"] = new Dictionary<string, object?>
+        {
+            ["@type"] = "Organization",
+            ["name"] = settings?.SiteTitle ?? "墨屿"
+        },
+        ["mainEntityOfPage"] = $"{Navigation.BaseUri.TrimEnd('/')}/blog/{post?.Slug}"
+    });
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedSlug == Slug)
+        {
+            return;
+        }
+
+        loadedSlug = Slug;
+        post = await Blog.GetPublishedBySlugAsync(Slug);
+        settings = await SettingsService.GetAsync();
+
+        if (post is null)
+        {
+            if (HttpContext is not null)
+            {
+                HttpContext.Response.StatusCode = 404;
+            }
+
+            return;
+        }
+
+        html = Markdown.ToHtml(post.ContentMarkdown);
+        headings = Markdown.ExtractHeadings(html);
+        readingMinutes = ReadingTime.EstimateMinutes(post.ContentMarkdown);
+        related = await Blog.GetRelatedAsync(post, 3);
+        neighbors = await Blog.GetNeighborsAsync(post);
+        await Blog.IncrementViewAsync(post.Id);
+        post.ViewCount += 1;
+    }
+}

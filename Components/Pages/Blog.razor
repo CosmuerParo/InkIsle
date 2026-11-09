@@ -1,0 +1,121 @@
+@page "/blog"
+@inject BlogService BlogService
+@inject SiteSettingsService SettingsService
+
+<PageMeta Title="@Title" Description="@Description" Path="/blog" />
+
+<section class="page-hero">
+    <div class="page-hero-inner">
+        <div>
+            <span class="eyebrow">THE JOURNAL</span>
+            <h1>所有文章</h1>
+            <p>@(string.IsNullOrWhiteSpace(Query) && string.IsNullOrWhiteSpace(ActiveTag)
+                ? "记录技术、阅读与日常。按时间排列，也可以沿着话题寻找。"
+                : "正在筛选文章。")</p>
+        </div>
+        <div class="page-hero-aside">
+            <span class="big-count">@result.Total</span>
+            <span>篇公开文章</span>
+        </div>
+    </div>
+</section>
+
+<section class="listing-shell">
+    <div class="listing-toolbar">
+        <form class="inline-search" action="/blog" method="get" role="search">
+            <Icon Name="search" Size="17" />
+            <input type="search" name="q" value="@Query" placeholder="搜索标题或正文…" aria-label="搜索文章" />
+            @if (!string.IsNullOrWhiteSpace(ActiveTag))
+            {
+                <input type="hidden" name="tag" value="@ActiveTag" />
+            }
+            <button type="submit">搜索</button>
+        </form>
+
+        @if (!string.IsNullOrWhiteSpace(Query) || !string.IsNullOrWhiteSpace(ActiveTag))
+        {
+            <a class="clear-filter" href="/blog">清除筛选 <Icon Name="x" Size="14" /></a>
+        }
+    </div>
+
+    @if (tags.Count > 0)
+    {
+        <div class="tag-filter">
+            <span class="tag-filter-label">话题</span>
+            <a class="tag-pill @(string.IsNullOrWhiteSpace(ActiveTag) ? "is-active" : "")" href="/blog">全部</a>
+            @foreach (var tag in tags)
+            {
+                <a class="tag-pill @(string.Equals(tag.Name, ActiveTag, StringComparison.OrdinalIgnoreCase) ? "is-active" : "")"
+                   href="@($"/blog?tag={Uri.EscapeDataString(tag.Name)}")">#@tag.Name</a>
+            }
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(Query))
+    {
+        <div class="search-summary">
+            关于「<strong>@Query</strong>」的搜索结果：共 @result.Total 篇
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(ActiveTag))
+    {
+        <div class="search-summary">
+            话题「<strong>#@ActiveTag</strong>」下共有 @result.Total 篇
+        </div>
+    }
+
+    @if (result.Items.Count == 0)
+    {
+        <EmptyState Title="没有找到相符的文章"
+                    Description="试一个更短的关键词，或者回到全部文章。"
+                    ActionText="查看全部" ActionHref="/blog" />
+    }
+    else
+    {
+        <div class="post-grid listing-grid">
+            @for (var i = 0; i < result.Items.Count; i++)
+            {
+                <PostCard Post="result.Items[i]" Index="((result.Page - 1) * result.PageSize) + i + 1" />
+            }
+        </div>
+
+        <Pagination Page="result.Page" TotalPages="result.TotalPages" BasePath="/blog"
+                    Query="@PaginationQuery" />
+    }
+</section>
+
+@code {
+    private const int PageSize = 9;
+    private PagedPosts result = new([], 0, 1, PageSize);
+    private List<TagCloudItem> tags = [];
+
+    [SupplyParameterFromQuery(Name = "page")]
+    public int Page { get; set; } = 1;
+
+    [SupplyParameterFromQuery(Name = "q")]
+    public string? Query { get; set; }
+
+    [SupplyParameterFromQuery(Name = "tag")]
+    public string? ActiveTag { get; set; }
+
+    private Dictionary<string, string?> PaginationQuery => new()
+    {
+        ["q"] = string.IsNullOrWhiteSpace(Query) ? null : Query,
+        ["tag"] = string.IsNullOrWhiteSpace(ActiveTag) ? null : ActiveTag
+    };
+
+    private string Title => !string.IsNullOrWhiteSpace(Query)
+        ? $"搜索：{Query}"
+        : !string.IsNullOrWhiteSpace(ActiveTag) ? $"话题：{ActiveTag}" : "所有文章";
+
+    private string Description => !string.IsNullOrWhiteSpace(Query)
+        ? $"在墨屿中搜索「{Query}」的结果。"
+        : !string.IsNullOrWhiteSpace(ActiveTag) ? $"浏览墨屿中关于「{ActiveTag}」的文章。" : "墨屿的全部文章：技术、阅读与日常。";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Page = Math.Max(1, Page);
+        result = await BlogService.GetPublishedAsync(Page, PageSize, Query, ActiveTag);
+        tags = await BlogService.GetTagsAsync();
+    }
+}

@@ -1,0 +1,226 @@
+@page "/admin/settings"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin")]
+@rendermode InteractiveServer
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject SiteSettingsService SettingsService
+
+<PageTitle>站点设置 · 墨屿写作后台</PageTitle>
+
+<EditForm Model="settings" OnValidSubmit="SaveAsync" class="settings-form">
+    <DataAnnotationsValidator />
+
+    <div class="admin-page-head">
+        <div>
+            <span class="admin-eyebrow">SITE / SETTINGS</span>
+            <h1>站点设置</h1>
+            <p>调整站点的名字、首页文案，以及全站生效的样式与脚本。</p>
+        </div>
+        <button class="btn btn-primary" type="submit" disabled="@_busy">
+            <Icon Name="check" Size="17" />
+            @(_busy ? "保存中…" : "保存设置")
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(message))
+    {
+        <div class="form-alert form-alert-success">@message</div>
+    }
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="form-alert form-alert-error">@errorMessage</div>
+    }
+
+    <div class="settings-grid">
+        <div class="settings-main">
+            <section class="admin-panel">
+                <div class="panel-head">
+                    <div>
+                        <span class="admin-eyebrow">IDENTITY</span>
+                        <h2>站点身份</h2>
+                    </div>
+                </div>
+                <div class="settings-fields">
+                    <div class="field">
+                        <label for="site-title">站点名称</label>
+                        <InputText id="site-title" class="input" @bind-Value="settings.SiteTitle" />
+                        <ValidationMessage For="() => settings.SiteTitle" class="field-error" />
+                    </div>
+                    <div class="field">
+                        <label for="site-tagline">副标题</label>
+                        <InputText id="site-tagline" class="input" @bind-Value="settings.Tagline" />
+                        <ValidationMessage For="() => settings.Tagline" class="field-error" />
+                    </div>
+                    <div class="field field-full">
+                        <label for="site-description">站点描述</label>
+                        <InputTextArea id="site-description" class="input" @bind-Value="settings.Description" rows="3" />
+                        <p class="field-help">用于 SEO 描述和页脚介绍。</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="admin-panel">
+                <div class="panel-head">
+                    <div>
+                        <span class="admin-eyebrow">HOMEPAGE</span>
+                        <h2>首页 Hero</h2>
+                    </div>
+                </div>
+                <div class="settings-fields">
+                    <div class="field field-full">
+                        <label for="hero-kicker">英文小标题</label>
+                        <InputText id="hero-kicker" class="input" @bind-Value="settings.HeroKicker" />
+                    </div>
+                    <div class="field field-full">
+                        <label for="hero-title">主标题</label>
+                        <InputText id="hero-title" class="input" @bind-Value="settings.HeroTitle" />
+                    </div>
+                    <div class="field field-full">
+                        <label for="hero-subtitle">副文案</label>
+                        <InputTextArea id="hero-subtitle" class="input" @bind-Value="settings.HeroSubtitle" rows="3" />
+                    </div>
+                </div>
+            </section>
+
+            <section class="admin-panel">
+                <div class="panel-head">
+                    <div>
+                        <span class="admin-eyebrow">AUTHOR & FOOTER</span>
+                        <h2>作者与页脚</h2>
+                    </div>
+                </div>
+                <div class="settings-fields">
+                    <div class="field">
+                        <label for="author-name">作者名</label>
+                        <InputText id="author-name" class="input" @bind-Value="settings.AuthorName" />
+                    </div>
+                    <div class="field">
+                        <label for="author-email">联系邮箱</label>
+                        <InputText id="author-email" class="input" @bind-Value="settings.Email" />
+                    </div>
+                    <div class="field field-full">
+                        <label for="author-bio">作者简介</label>
+                        <InputTextArea id="author-bio" class="input" @bind-Value="settings.AuthorBio" rows="3" />
+                    </div>
+                    <div class="field">
+                        <label for="github-url">GitHub 地址</label>
+                        <InputText id="github-url" class="input" @bind-Value="settings.GithubUrl" />
+                    </div>
+                    <div class="field">
+                        <label for="footer-text">页脚短句</label>
+                        <InputText id="footer-text" class="input" @bind-Value="settings.FooterText" />
+                    </div>
+                </div>
+            </section>
+
+            <section class="admin-panel">
+                <div class="panel-head">
+                    <div>
+                        <span class="admin-eyebrow">APPEARANCE</span>
+                        <h2>强调色</h2>
+                    </div>
+                </div>
+                <div class="settings-fields">
+                    <div class="field">
+                        <label for="accent-color">主题强调色</label>
+                        <div class="color-field">
+                            <InputText type="color" id="accent-color" class="color-input" @bind-Value="settings.AccentColor" />
+                            <InputText class="input color-text" @bind-Value="settings.AccentColor" />
+                        </div>
+                        <p class="field-help">支持 #RRGGBB 格式。用于链接、按钮与强调元素。</p>
+                        <ValidationMessage For="() => settings.AccentColor" class="field-error" />
+                    </div>
+                    <div class="accent-preview">
+                        <span>预览</span>
+                        <a href="/blog" tabindex="-1">文字链接</a>
+                        <span class="btn btn-primary btn-small" tabindex="-1">按钮</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="admin-panel">
+                <div class="panel-head">
+                    <div>
+                        <span class="admin-eyebrow">CUSTOM CODE</span>
+                        <h2>全站 CSS 与 JavaScript</h2>
+                    </div>
+                </div>
+                <div class="form-note form-note-warning">
+                    <strong>全站脚本会注入到每个公开页面</strong>
+                    <p>可以用来接入统计、字体加载或自定义交互。脚本拥有页面权限，请只添加可信代码。后台页面不会加载它。</p>
+                </div>
+                <div class="field">
+                    <label for="site-css">全站 CSS</label>
+                    <InputTextArea id="site-css" class="input code-textarea" @bind-Value="settings.SiteWideCss" rows="6"
+                                   placeholder="/* 全站额外样式 */" spellcheck="false" />
+                </div>
+                <div class="field">
+                    <label for="site-js">全站 JavaScript</label>
+                    <InputTextArea id="site-js" class="input code-textarea" @bind-Value="settings.SiteWideJs" rows="8"
+                                   placeholder="// 全站脚本" spellcheck="false" />
+                </div>
+            </section>
+        </div>
+
+        <aside class="settings-aside">
+            <section class="editor-side-card settings-preview-card">
+                <span class="admin-eyebrow">LIVE PREVIEW</span>
+                <div class="site-preview">
+                    <span class="site-preview-mark">墨</span>
+                    <strong>@settings.SiteTitle</strong>
+                    <small>@settings.Tagline</small>
+                    <p>@settings.HeroTitle</p>
+                    <span class="site-preview-button">开始阅读 →</span>
+                </div>
+            </section>
+            <div class="editor-side-note">
+                <Icon Name="spark" Size="17" />
+                <p>设置保存后会立即生效。公共页面的设置缓存会自动刷新。</p>
+            </div>
+        </aside>
+    </div>
+</EditForm>
+
+@code {
+    private SiteSettings settings = new();
+    private string? message;
+    private string? errorMessage;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        settings = await db.SiteSettings.AsNoTracking().FirstAsync(s => s.Id == 1);
+    }
+
+    private async Task SaveAsync()
+    {
+        errorMessage = null;
+        message = null;
+
+        if (!System.Text.RegularExpressions.Regex.IsMatch(settings.AccentColor ?? "", "^#[0-9a-fA-F]{6}$"))
+        {
+            errorMessage = "强调色必须是 #RRGGBB 格式，例如 #c65a3f。";
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            settings.UpdatedAtUtc = DateTime.UtcNow;
+            db.SiteSettings.Update(settings);
+            await db.SaveChangesAsync();
+            SettingsService.Invalidate();
+            message = "设置已保存，公共页面会在下一次访问时使用新配置。";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"保存失败：{ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

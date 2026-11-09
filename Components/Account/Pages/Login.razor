@@ -1,0 +1,159 @@
+@page "/Account/Login"
+
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Identity
+@using InkIsle.Data
+
+@inject SignInManager<ApplicationUser> SignInManager
+@inject ILogger<Login> Logger
+@inject NavigationManager NavigationManager
+@inject IdentityRedirectManager RedirectManager
+@inject IWebHostEnvironment Environment
+
+<PageTitle>登录 · 墨屿</PageTitle>
+
+<div class="auth-page">
+    <section class="auth-brand">
+        <div class="auth-brand-inner">
+            <a class="auth-logo" href="/">
+                <span class="logo-mark">墨</span>
+                <span class="logo-type">INK ISLE<small>墨屿</small></span>
+            </a>
+            <div class="auth-quote">
+                <span class="eyebrow">PRIVATE WRITING ROOM</span>
+                <h1>写给世界，<br />也写给自己。</h1>
+                <p>岛屿的背面，是一间安静的书房。登录之后，你可以继续写下那些还没有说完的话。</p>
+            </div>
+            <div class="auth-brand-footer">
+                <span>EST. 2026</span>
+                <span class="auth-brand-line"></span>
+                <span>INK &amp; CODE</span>
+            </div>
+        </div>
+        <div class="auth-orbit auth-orbit-one"></div>
+        <div class="auth-orbit auth-orbit-two"></div>
+    </section>
+
+    <section class="auth-panel">
+        <div class="auth-form-wrap">
+            <a class="auth-back" href="/">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 18l-6-6 6-6" /></svg>
+                返回首页
+            </a>
+
+            <div class="auth-heading">
+                <span class="eyebrow">ADMIN ACCESS</span>
+                <h2>欢迎回来</h2>
+                <p>登录后进入写作后台。</p>
+            </div>
+
+            <StatusMessage Message="@errorMessage" />
+
+            <EditForm Model="Input" method="post" OnValidSubmit="LoginUser" FormName="login" class="auth-form">
+                <DataAnnotationsValidator />
+                <div class="field">
+                    <label for="email">邮箱</label>
+                    <InputText id="email" @bind-Value="Input.Email" class="input" autocomplete="username"
+                               aria-required="true" placeholder="you@example.com" />
+                    <ValidationMessage For="() => Input.Email" class="field-error" />
+                </div>
+
+                <div class="field">
+                    <div class="field-label-row">
+                        <label for="password">密码</label>
+                        <span class="field-hint">至少 8 位</span>
+                    </div>
+                    <InputText id="password" type="password" @bind-Value="Input.Password" class="input"
+                               autocomplete="current-password" aria-required="true" placeholder="输入密码" />
+                    <ValidationMessage For="() => Input.Password" class="field-error" />
+                </div>
+
+                <label class="checkbox-row">
+                    <InputCheckbox @bind-Value="Input.RememberMe" />
+                    <span>在这台设备上保持登录</span>
+                </label>
+
+                <button type="submit" class="btn btn-primary btn-block btn-lg">
+                    进入后台
+                    <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+                </button>
+            </EditForm>
+
+            @if (Environment.IsDevelopment())
+            {
+                <div class="demo-credentials">
+                    <span class="demo-credentials-label">本地演示账号</span>
+                    <code>admin@inkisle.local</code>
+                    <code>InkIsle@@2026</code>
+                </div>
+            }
+
+            <p class="auth-note">此入口仅供站点管理员使用。访客无需登录即可阅读全部文章。</p>
+        </div>
+    </section>
+</div>
+
+@code {
+    private string? errorMessage;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm]
+    private InputModel Input { get; set; } = new();
+
+    [SupplyParameterFromQuery]
+    private string? ReturnUrl { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (HttpContext.User.Identity?.IsAuthenticated == true)
+        {
+            RedirectManager.RedirectTo("admin");
+        }
+
+        if (HttpMethods.IsGet(HttpContext.Request.Method))
+        {
+            await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
+        }
+    }
+
+    public async Task LoginUser()
+    {
+        var result = await SignInManager.PasswordSignInAsync(Input.Email, Input.Password, Input.RememberMe, lockoutOnFailure: true);
+        if (result.Succeeded)
+        {
+            Logger.LogInformation("Administrator logged in.");
+            RedirectManager.RedirectTo(string.IsNullOrWhiteSpace(ReturnUrl) || ReturnUrl.StartsWith("account/login", StringComparison.OrdinalIgnoreCase)
+                ? "admin"
+                : ReturnUrl);
+        }
+        else if (result.RequiresTwoFactor)
+        {
+            errorMessage = "此账号启用了两步验证，请使用支持两步验证的登录方式。";
+        }
+        else if (result.IsLockedOut)
+        {
+            Logger.LogWarning("Administrator account locked out.");
+            errorMessage = "尝试次数过多，账号已暂时锁定，请 10 分钟后再试。";
+        }
+        else
+        {
+            errorMessage = "邮箱或密码不正确，请重试。";
+        }
+    }
+
+    private sealed class InputModel
+    {
+        [Required(ErrorMessage = "请输入邮箱")]
+        [EmailAddress(ErrorMessage = "请输入有效的邮箱地址")]
+        public string Email { get; set; } = "";
+
+        [Required(ErrorMessage = "请输入密码")]
+        [DataType(DataType.Password)]
+        public string Password { get; set; } = "";
+
+        public bool RememberMe { get; set; } = true;
+    }
+}

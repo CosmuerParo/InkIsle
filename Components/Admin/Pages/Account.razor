@@ -1,0 +1,225 @@
+@page "/admin/account"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin")]
+@inject UserManager<ApplicationUser> UserManager
+@inject SignInManager<ApplicationUser> SignInManager
+@inject IdentityRedirectManager RedirectManager
+@using InkIsle.Components.Account
+@using InkIsle.Components.Account.Shared
+
+<PageTitle>我的账号 · 墨屿写作后台</PageTitle>
+
+<div class="admin-page-head">
+    <div>
+        <span class="admin-eyebrow">ACCOUNT / SECURITY</span>
+        <h1>我的账号</h1>
+        <p>更新显示名称，或修改后台登录密码。</p>
+    </div>
+</div>
+
+<StatusMessage Message="@errorMessage" />
+
+<div class="account-grid">
+    <section class="admin-panel">
+        <div class="panel-head">
+            <div>
+                <span class="admin-eyebrow">PROFILE</span>
+                <h2>个人信息</h2>
+            </div>
+        </div>
+
+        <div class="account-identity">
+            <span class="account-avatar">@Initial</span>
+            <div>
+                <strong>@DisplayName</strong>
+                <span>@user?.Email</span>
+                @if (isAdmin)
+                {
+                    <span class="status-badge is-published">管理员</span>
+                }
+            </div>
+        </div>
+
+        <EditForm Model="Input" method="post" FormName="admin-account" OnValidSubmit="SaveAsync" class="account-form">
+            <DataAnnotationsValidator />
+            <div class="field">
+                <label for="display-name">显示名称</label>
+                <InputText id="display-name" class="input" @bind-Value="Input.DisplayName" />
+                <ValidationMessage For="() => Input.DisplayName" class="field-error" />
+            </div>
+
+            <hr class="form-divider" />
+            <h3 class="form-subheading">修改密码</h3>
+            <p class="field-help">不修改密码时，将下面三项留空即可。</p>
+
+            <div class="field">
+                <label for="current-password">当前密码</label>
+                <InputText id="current-password" type="password" class="input" @bind-Value="Input.CurrentPassword" autocomplete="current-password" />
+            </div>
+            <div class="field">
+                <label for="new-password">新密码</label>
+                <InputText id="new-password" type="password" class="input" @bind-Value="Input.NewPassword" autocomplete="new-password" />
+                <p class="field-help">至少 8 位，包含大小写字母与数字。</p>
+            </div>
+            <div class="field">
+                <label for="confirm-password">确认新密码</label>
+                <InputText id="confirm-password" type="password" class="input" @bind-Value="Input.ConfirmPassword" autocomplete="new-password" />
+            </div>
+
+            <button class="btn btn-primary" type="submit" disabled="@_busy">
+                <Icon Name="check" Size="17" />
+                @(_busy ? "保存中…" : "保存修改")
+            </button>
+        </EditForm>
+    </section>
+
+    <aside class="account-aside">
+        <section class="editor-side-card">
+            <h2>安全建议</h2>
+            <ul class="security-list">
+                <li>首次登录后立即修改默认演示密码。</li>
+                <li>不要与其他站点复用同一个密码。</li>
+                <li>通过 HTTPS 部署，并定期备份 SQLite 数据库。</li>
+                <li>自定义 JavaScript 只添加来自可信来源的代码。</li>
+            </ul>
+        </section>
+        <div class="editor-side-note">
+            <Icon Name="spark" Size="17" />
+            <p>后台使用 ASP.NET Core Identity 的 Cookie 认证。登录状态默认保持 14 天。</p>
+        </div>
+    </aside>
+</div>
+
+@code {
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm] private AccountModel Input { get; set; } = new();
+
+    private ApplicationUser? user;
+    private string? errorMessage;
+    private bool _busy;
+    private bool isAdmin;
+    private string DisplayName = "岛主";
+    private string Initial => string.IsNullOrEmpty(DisplayName) ? "墨" : DisplayName[..1];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var id = HttpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (id is not null)
+        {
+            user = await UserManager.FindByIdAsync(id);
+        }
+
+        if (user is null)
+        {
+            return;
+        }
+
+        DisplayName = user.DisplayName;
+        isAdmin = await UserManager.IsInRoleAsync(user, "Admin");
+
+        if (HttpMethods.IsGet(HttpContext.Request.Method))
+        {
+            Input.DisplayName = user.DisplayName;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        errorMessage = null;
+
+        if (user is null)
+        {
+            errorMessage = "无法加载当前账号，请重新登录。";
+            return;
+        }
+
+        var changingPassword = !string.IsNullOrWhiteSpace(Input.NewPassword)
+            || !string.IsNullOrWhiteSpace(Input.CurrentPassword)
+            || !string.IsNullOrWhiteSpace(Input.ConfirmPassword);
+
+        if (changingPassword)
+        {
+            if (string.IsNullOrWhiteSpace(Input.NewPassword))
+            {
+                errorMessage = "请输入新密码。";
+                return;
+            }
+
+            if (Input.NewPassword != Input.ConfirmPassword)
+            {
+                errorMessage = "两次输入的新密码不一致。";
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(Input.CurrentPassword))
+            {
+                errorMessage = "修改密码需要输入当前密码。";
+                return;
+            }
+        }
+
+        _busy = true;
+        try
+        {
+            var displayName = Input.DisplayName.Trim();
+            if (user.DisplayName != displayName)
+            {
+                user.DisplayName = displayName;
+                var updateResult = await UserManager.UpdateAsync(user);
+                if (!updateResult.Succeeded)
+                {
+                    errorMessage = string.Join("；", updateResult.Errors.Select(e => e.Description));
+                    return;
+                }
+
+                var claims = await UserManager.GetClaimsAsync(user);
+                var claim = claims.FirstOrDefault(c => c.Type == "DisplayName");
+                if (claim is not null)
+                {
+                    await UserManager.ReplaceClaimAsync(user, claim, new System.Security.Claims.Claim("DisplayName", displayName));
+                }
+                else
+                {
+                    await UserManager.AddClaimAsync(user, new System.Security.Claims.Claim("DisplayName", displayName));
+                }
+            }
+
+            if (changingPassword)
+            {
+                var passwordResult = await UserManager.ChangePasswordAsync(user, Input.CurrentPassword!, Input.NewPassword!);
+                if (!passwordResult.Succeeded)
+                {
+                    errorMessage = string.Join("；", passwordResult.Errors.Select(e => e.Description));
+                    return;
+                }
+            }
+
+            await SignInManager.RefreshSignInAsync(user);
+            RedirectManager.RedirectToCurrentPageWithStatus("账号信息已更新。", HttpContext);
+        }
+        catch (NavigationException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"保存失败：{ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    public sealed class AccountModel
+    {
+        [Required(ErrorMessage = "显示名称不能为空")]
+        [MaxLength(80, ErrorMessage = "显示名称不能超过 80 个字符")]
+        public string DisplayName { get; set; } = "";
+
+        public string? CurrentPassword { get; set; }
+        public string? NewPassword { get; set; }
+        public string? ConfirmPassword { get; set; }
+    }
+}

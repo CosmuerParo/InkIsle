@@ -1,0 +1,168 @@
+@inherits LayoutComponentBase
+@inject BlogService Blog
+@inject SiteSettingsService SettingsService
+
+<PageTitle>墨屿 · 在文字的岛屿上，慢一点</PageTitle>
+
+@if (settings is not null)
+{
+    <style>:root { --accent: @SafeAccent(settings.AccentColor); }</style>
+}
+
+<div class="reading-progress" data-reading-progress></div>
+
+<header class="site-header" data-site-header>
+    <div class="header-inner">
+        <a class="brand" href="/" aria-label="墨屿首页">
+            <span class="brand-mark">墨</span>
+            <span class="brand-type">
+                <strong>@(settings?.SiteTitle ?? "墨屿")</strong>
+                <small>INK ISLE</small>
+            </span>
+        </a>
+
+        <nav class="desktop-nav" aria-label="主导航">
+            <NavLink href="/" Match="NavLinkMatch.All">首页</NavLink>
+            <NavLink href="/blog">文章</NavLink>
+            <NavLink href="/archive">归档</NavLink>
+            @foreach (var navPage in navPages)
+            {
+                <NavLink href="@($"/{navPage.Slug}")">@navPage.Title</NavLink>
+            }
+        </nav>
+
+        <div class="header-actions">
+            <button class="icon-button" type="button" data-search-open aria-label="搜索文章">
+                <Icon Name="search" Size="18" />
+            </button>
+            <button class="icon-button theme-toggle" type="button" data-theme-toggle aria-label="切换深浅色">
+                <span class="theme-icon theme-icon-sun"><Icon Name="sun" Size="18" /></span>
+                <span class="theme-icon theme-icon-moon"><Icon Name="moon" Size="18" /></span>
+            </button>
+            <a class="header-admin" href="/admin" title="写作后台">
+                <Icon Name="pen" Size="16" />
+                <span>写作</span>
+            </a>
+            <button class="icon-button mobile-menu-button" type="button" data-mobile-menu aria-label="打开菜单" aria-expanded="false">
+                <Icon Name="menu" Size="20" />
+            </button>
+        </div>
+    </div>
+</header>
+
+<div class="mobile-menu" data-mobile-panel aria-hidden="true">
+    <nav aria-label="移动端导航">
+        <a href="/">首页<span>HOME</span></a>
+        <a href="/blog">文章<span>JOURNAL</span></a>
+        <a href="/archive">归档<span>ARCHIVE</span></a>
+        @foreach (var navPage in navPages)
+        {
+            <a href="@($"/{navPage.Slug}")">@navPage.Title<span>PAGE</span></a>
+        }
+    </nav>
+    <div class="mobile-menu-footer">
+        <a href="/feed.xml">RSS 订阅</a>
+        <a href="/admin">写作后台</a>
+    </div>
+</div>
+
+<div class="search-overlay" data-search-overlay hidden>
+    <button class="search-close" type="button" data-search-close aria-label="关闭搜索">
+        <Icon Name="x" Size="24" />
+    </button>
+    <form class="search-panel" action="/blog" method="get">
+        <span class="eyebrow">SEARCH THE ISLAND</span>
+        <label for="site-search">在岛上寻找什么？</label>
+        <div class="search-input-row">
+            <input id="site-search" name="q" type="search" placeholder="输入关键词，回车搜索…" autocomplete="off" data-search-input />
+            <button type="submit" aria-label="搜索"><Icon Name="arrow-right" Size="22" /></button>
+        </div>
+        <p>试试「写作」「JavaScript」或「SQLite」</p>
+    </form>
+</div>
+
+<main id="main-content" class="site-main">
+    @Body
+</main>
+
+<footer class="site-footer">
+    <div class="footer-inner">
+        <div class="footer-brand">
+            <a class="brand" href="/">
+                <span class="brand-mark">墨</span>
+                <span class="brand-type"><strong>@(settings?.SiteTitle ?? "墨屿")</strong><small>INK ISLE</small></span>
+            </a>
+            <p>@(settings?.FooterText ?? "愿每一次抵达，都有文字留下回声。")</p>
+            <div class="footer-socials">
+                @if (!string.IsNullOrWhiteSpace(settings?.Email))
+                {
+                    <a href="mailto:@settings.Email" aria-label="邮件"><Icon Name="mail" Size="18" /></a>
+                }
+                @if (!string.IsNullOrWhiteSpace(settings?.GithubUrl))
+                {
+                    <a href="@settings.GithubUrl" target="_blank" rel="noopener" aria-label="GitHub"><Icon Name="github" Size="18" /></a>
+                }
+                <a href="/feed.xml" aria-label="RSS"><Icon Name="rss" Size="18" /></a>
+            </div>
+        </div>
+
+        <div class="footer-column">
+            <h3>漫游</h3>
+            <a href="/">首页</a>
+            <a href="/blog">全部文章</a>
+            <a href="/archive">归档</a>
+        </div>
+
+        <div class="footer-column">
+            <h3>岛上</h3>
+            @foreach (var navPage in navPages)
+            {
+                <a href="@($"/{navPage.Slug}")">@navPage.Title</a>
+            }
+            <a href="/admin">写作后台</a>
+        </div>
+
+        <div class="footer-column footer-note">
+            <h3>关于</h3>
+            <p>@(settings?.Description ?? "一个关于写作、技术与生活的安静角落。")</p>
+        </div>
+    </div>
+
+    <div class="footer-bottom">
+        <span>© @DateTime.Now.Year @(settings?.SiteTitle ?? "墨屿"). 文字与代码，皆由时间酿成。</span>
+        <span class="footer-meta">BUILT WITH .NET 8 · BLAZOR · SQLITE</span>
+    </div>
+</footer>
+
+<button class="back-to-top" type="button" data-back-to-top aria-label="回到顶部">
+    <Icon Name="arrow-up" Size="20" />
+</button>
+
+@if (settings is not null)
+{
+    <CustomAssets Id="site-wide-assets" Css="@settings.SiteWideCss" Js="@settings.SiteWideJs" />
+}
+
+@code {
+    private SiteSettings? settings;
+    private IReadOnlyList<BlogPage> navPages = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        settings = await SettingsService.GetAsync();
+        navPages = await Blog.GetNavPagesAsync();
+    }
+
+    private static string SafeAccent(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "#c65a3f";
+        }
+
+        var candidate = value.Trim();
+        return System.Text.RegularExpressions.Regex.IsMatch(candidate, "^#[0-9a-fA-F]{6}$")
+            ? candidate
+            : "#c65a3f";
+    }
+}

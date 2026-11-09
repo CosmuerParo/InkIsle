@@ -1,0 +1,16 @@
+<div class="empty-state">
+    <span class="empty-mark">∅</span>
+    <h3>@Title</h3>
+    <p>@Description</p>
+    @if (!string.IsNullOrWhiteSpace(ActionText))
+    {
+        <a class="btn btn-ghost" href="@ActionHref">@ActionText</a>
+    }
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = "这里还空着";
+    [Parameter] public string Description { get; set; } = "换一个地方看看吧。";
+    [Parameter] public string? ActionText { get; set; }
+    [Parameter] public string ActionHref { get; set; } = "/";
+}

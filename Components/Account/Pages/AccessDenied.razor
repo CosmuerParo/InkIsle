@@ -1,0 +1,16 @@
+@page "/Account/AccessDenied"
+@layout InkIsle.Components.Layout.AuthLayout
+
+<PageTitle>没有访问权限 · 墨屿</PageTitle>
+
+<div class="auth-page auth-page-simple">
+    <div class="auth-form-wrap access-denied">
+        <span class="eyebrow">403 · ACCESS DENIED</span>
+        <h1>这里只有岛主可以进入。</h1>
+        <p>当前账号没有后台管理权限。如果你想阅读文章，请回到首页。</p>
+        <div class="button-row">
+            <a class="btn btn-primary" href="/">回到首页</a>
+            <a class="btn btn-ghost" href="/account/login">换一个账号</a>
+        </div>
+    </div>
+</div>
